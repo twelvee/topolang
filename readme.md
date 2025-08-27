@@ -2,7 +2,9 @@
 
 A tiny domain-specific language (DSL) and runtime for **procedural mesh generation** in C. It includes a hand-written lexer, recursive-descent parser, AST, small interpreter with built-in geometry intrinsics, and a minimal C API to compile and execute TopoLang sources and retrieve triangle/quad meshes.
 
-> Status: library (no CLI yet). Designed to be embedded in tools and pipelines.
+Topo from topology.
+
+> Status: library (no CLI yet). Designed to be embedded in tools and pipelines. Heavily under development.
 
 ---
 
