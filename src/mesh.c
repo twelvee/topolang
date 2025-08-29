@@ -144,12 +144,30 @@ void mesh_scale(QMesh *m, float sx, float sy, float sz) {
     }
 }
 
+void mesh_rotate_x(QMesh *m, float rad) {
+    float c = cosf(rad), s = sinf(rad);
+    for (int i = 0; i < m->vCount; i++) {
+        float y = m->v[i].y, z = m->v[i].z;
+        m->v[i].y = y * c - z * s;
+        m->v[i].z = y * s + z * c;
+    }
+}
+
 void mesh_rotate_y(QMesh *m, float rad) {
     float c = cosf(rad), s = sinf(rad);
     for (int i = 0; i < m->vCount; i++) {
         float x = m->v[i].x, z = m->v[i].z;
         m->v[i].x = x * c + z * s;
         m->v[i].z = -x * s + z * c;
+    }
+}
+
+void mesh_rotate_z(QMesh *m, float rad) {
+    float c = cosf(rad), s = sinf(rad);
+    for (int i = 0; i < m->vCount; i++) {
+        float x = m->v[i].x, y = m->v[i].y;
+        m->v[i].x = x * c - y * s;
+        m->v[i].y = x * s + y * c;
     }
 }
 

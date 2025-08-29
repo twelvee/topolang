@@ -141,6 +141,42 @@ static Value bi_merge(Host *H, Value *args, int argc, char err[256]) {
     return VMes(m);
 }
 
+static Value bi_rotate_x(Host *H, Value *args, int argc, char err[256]) {
+    if (argc < 2 || args[0].k != VAL_MESH) {
+        strcpy(err, "rotate_x(mesh, rad)");
+        return VVoid();
+    }
+    QMesh *m = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
+    qm_init(m);
+    mesh_merge(m, args[0].mesh);
+    mesh_rotate_x(m, (float) ARGNUM(1));
+    return VMes(m);
+}
+
+static Value bi_rotate_y(Host *H, Value *args, int argc, char err[256]) {
+    if (argc < 2 || args[0].k != VAL_MESH) {
+        strcpy(err, "rotate_y(mesh, rad)");
+        return VVoid();
+    }
+    QMesh *m = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
+    qm_init(m);
+    mesh_merge(m, args[0].mesh);
+    mesh_rotate_y(m, (float) ARGNUM(1));
+    return VMes(m);
+}
+
+static Value bi_rotate_z(Host *H, Value *args, int argc, char err[256]) {
+    if (argc < 2 || args[0].k != VAL_MESH) {
+        strcpy(err, "rotate_z(mesh, rad)");
+        return VVoid();
+    }
+    QMesh *m = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
+    qm_init(m);
+    mesh_merge(m, args[0].mesh);
+    mesh_rotate_z(m, (float) ARGNUM(1));
+    return VMes(m);
+}
+
 static Value bi_mirror_x(Host *H, Value *args, int argc, char err[256]) {
     if (argc < 1 || args[0].k != VAL_MESH) {
         strcpy(err, "mirror_x(mesh, weld)");
@@ -274,6 +310,9 @@ static const Builtin BI[] = {
         {"lift_x",   bi_lift_x},
         {"lift_y",   bi_lift_y},
         {"lift_z",   bi_lift_z},
+        {"rotate_x", bi_rotate_x},
+        {"rotate_y", bi_rotate_y},
+        {"rotate_z", bi_rotate_z},
         {"stitch",   bi_stitch},
         {"merge",    bi_merge},
         {"mirror_x", bi_mirror_x},

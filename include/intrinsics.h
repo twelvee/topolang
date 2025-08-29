@@ -51,6 +51,12 @@ void mesh_mirror_y(QMesh *m, float weld);
 
 void mesh_mirror_z(QMesh *m, float weld);
 
+void mesh_rotate_y(QMesh *m, float rad);
+
+void mesh_rotate_x(QMesh *m, float rad);
+
+void mesh_rotate_z(QMesh *m, float rad);
+
 void mesh_move(QMesh *m, float dx, float dy, float dz);
 
 void mesh_scale(QMesh *m, float sx, float sy, float sz);
