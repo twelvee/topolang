@@ -15,7 +15,8 @@ typedef enum {
     ND_BLOCK,
     ND_ASSIGN, ND_CALL, ND_IDENT, ND_NUM, ND_STR,
     ND_RETURN, ND_IMPORT, ND_ARRAY, ND_ADD, ND_NEG,
-    ND_SUB, ND_MUL, ND_DIV
+    ND_SUB, ND_MUL, ND_DIV,
+    ND_FOR
 } NodeKind;
 
 typedef struct {
@@ -55,6 +56,14 @@ typedef struct {
 typedef struct {
     AstList elems;
 } NdArray;
+
+typedef struct {
+    char *iter;
+    Ast *from;
+    Ast *to;
+    int inclusive;
+    Ast *body;
+} NdFor;
 
 typedef struct Ast {
     NodeKind kind;
@@ -100,6 +109,7 @@ typedef struct Ast {
         struct {
             char *path;
         } import_;
+        NdFor for_;
     };
 } Ast;
 

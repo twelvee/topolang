@@ -40,6 +40,8 @@ static Token keyword(Lexer *L, const char *s, int n, Token def) {
     if (n == 6 && !strncmp(s, "return", 6)) return make(L, TK_RETURN, s, n);
     if (n == 6 && !strncmp(s, "import", 6)) return make(L, TK_IMPORT, s, n);
     if (n == 8 && !strncmp(s, "override", 8)) return make(L, TK_OVERRIDE, s, n);
+    if (n == 3 && !strncmp(s, "for", 3)) return make(L, TK_FOR, s, n);
+    if (n == 2 && !strncmp(s, "in", 2)) return make(L, TK_IN, s, n);
     return def;
 }
 
@@ -111,9 +113,19 @@ Token lex_next(Lexer *L) {
             case ';':
                 adv(L);
                 return make(L, TK_SEMI, L->cur - 1, 1);
-            case '.':
+            case '.': {
+                int line = L->line, col = L->col;
                 adv(L);
-                return make(L, TK_DOT, L->cur - 1, 1);
+                if (*L->cur == '.') {
+                    adv(L);
+                    if (*L->cur == '=') {
+                        adv(L);
+                        return make_at(line, col, TK_DOTDOT_EQ, L->cur - 3, 3);
+                    }
+                    return make_at(line, col, TK_DOTDOT, L->cur - 2, 2);
+                }
+                return make_at(line, col, TK_DOT, L->cur - 1, 1);
+            }
             case '=':
                 adv(L);
                 return make(L, TK_EQ, L->cur - 1, 1);
@@ -130,13 +142,15 @@ Token lex_next(Lexer *L) {
                 return t;
             }
         }
-        if (isdigit((unsigned char)c) || (c=='.' && isdigit((unsigned char)L->cur[1]))) {
-            int line=L->line, col=L->col;
+        if (isdigit((unsigned char) c) || (c == '.' && isdigit((unsigned char) L->cur[1]))) {
+            int line = L->line, col = L->col;
             const char *s = L->cur;
             int n = 0, seen_dot = 0;
-            while (isdigit((unsigned char)*L->cur) || (*L->cur == '.' && !seen_dot)) {
+            while (isdigit((unsigned char) *L->cur) ||
+                   (*L->cur == '.' && !seen_dot && isdigit((unsigned char) L->cur[1]))) {
                 if (*L->cur == '.') seen_dot = 1;
-                adv(L); n++;
+                adv(L);
+                n++;
             }
             Token t = make_at(line, col, TK_NUMBER, s, n);
             t.number = strtod(s, NULL);

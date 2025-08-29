@@ -81,6 +81,8 @@ static Ast *parse_expr(Parser *P);
 
 static Ast *parse_statement(Parser *P);
 
+static Ast *parse_for(Parser *P);
+
 static Ast *parse_primary(Parser *P) {
     if (P->t.kind == TK_IDENT) {
         Token id = P->t;
@@ -304,6 +306,9 @@ static Ast *parse_statement(Parser *P) {
         next_tok(P);
         return parse_return(P);
     }
+    if (P->t.kind == TK_FOR) {
+        return parse_for(P);
+    }
     Ast *e = parse_expr(P);
     expect(P, TK_SEMI, ";");
     return e;
@@ -342,6 +347,32 @@ static Ast *parse_block(Parser *P) {
     }
     skip_nl(P);
     expect(P, TK_RBRACE, "}");
+    return n;
+}
+
+static Ast *parse_for(Parser *P) {
+    Ast *n = newNode(P, ND_FOR);
+    expect(P, TK_FOR, "for");
+    Token it = P->t;
+    expect(P, TK_IDENT, "identifier");
+    n->for_.iter = dupLex(P, &it);
+    skip_nl(P);
+    expect(P, TK_IN, "in");
+    skip_nl(P);
+    n->for_.from = parse_expr(P);
+    if (!n->for_.from) return NULL;
+    skip_nl(P);
+    if (accept(P, TK_DOTDOT_EQ)) {
+        n->for_.inclusive = 1;
+    } else {
+        expect(P, TK_DOTDOT, ".. or ..=");
+        n->for_.inclusive = 0;
+    }
+    skip_nl(P);
+    n->for_.to = parse_expr(P);
+    if (!n->for_.to) return NULL;
+    skip_nl(P);
+    n->for_.body = parse_block(P);
     return n;
 }
 

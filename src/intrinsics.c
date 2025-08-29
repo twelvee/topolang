@@ -357,6 +357,36 @@ static Value bi_ringlist(Host *H, Value *args, int argc, char err[256]) {
     return VRingList(arr, argc);
 }
 
+static Value bi_ringlist_push(Host *H, Value *args, int argc, char err[256]) {
+    if (argc != 2 || args[0].k != VAL_RINGLIST || args[1].k != VAL_RING) {
+        strcpy(err, "ringlist_push(list, ring)");
+        return VVoid();
+    }
+    int n = args[0].ringlist.count;
+    QRing *src = args[0].ringlist.data;
+    QRing *arr = (QRing *) H->alloc(H, sizeof(QRing) * (size_t) (n + 1), 8);
+    if (n > 0) memcpy(arr, src, sizeof(QRing) * (size_t) n);
+    arr[n] = *args[1].ring;
+    return VRingList(arr, n + 1);
+}
+
+static Value bi_first(Host *H, Value *args, int argc, char err[256]) {
+    if (argc != 1 || args[0].k != VAL_RINGLIST || args[0].ringlist.count <= 0) {
+        strcpy(err, "first(ringlist)");
+        return VVoid();
+    }
+    return VRingV(&args[0].ringlist.data[0]);
+}
+
+static Value bi_last(Host *H, Value *args, int argc, char err[256]) {
+    if (argc != 1 || args[0].k != VAL_RINGLIST || args[0].ringlist.count <= 0) {
+        strcpy(err, "last(ringlist)");
+        return VVoid();
+    }
+    return VRingV(&args[0].ringlist.data[args[0].ringlist.count - 1]);
+}
+
+
 static Value bi_vertex(Host *H, Value *args, int argc, char err[256]) {
     if (argc < 3) {
         strcpy(err, "vertex(x,y,z)");
@@ -413,27 +443,30 @@ static Value bi_mesh(Host *H, Value *args, int argc, char err[256]) {
 }
 
 static const Builtin BI[] = {
-        {"vertex",    bi_vertex},
-        {"quad",      bi_quad},
-        {"mesh",      bi_mesh},
-        {"ring",      bi_ring},
-        {"grow_out",  bi_grow_out},
-        {"lift_x",    bi_lift_x},
-        {"lift_y",    bi_lift_y},
-        {"lift_z",    bi_lift_z},
-        {"rotate_x",  bi_rotate_x},
-        {"rotate_y",  bi_rotate_y},
-        {"rotate_z",  bi_rotate_z},
-        {"stitch",    bi_stitch},
-        {"merge",     bi_merge},
-        {"mirror_x",  bi_mirror_x},
-        {"mirror_y",  bi_mirror_y},
-        {"mirror_z",  bi_mirror_z},
-        {"move",      bi_move},
-        {"scale",     bi_scale},
-        {"ringlist",  bi_ringlist},
-        {"cap_plane", bi_cap_plane},
-        {"weld",      bi_weld},
+        {"vertex",        bi_vertex},
+        {"quad",          bi_quad},
+        {"mesh",          bi_mesh},
+        {"ring",          bi_ring},
+        {"ringlist_push", bi_ringlist_push},
+        {"first",         bi_first},
+        {"last",          bi_last},
+        {"grow_out",      bi_grow_out},
+        {"lift_x",        bi_lift_x},
+        {"lift_y",        bi_lift_y},
+        {"lift_z",        bi_lift_z},
+        {"rotate_x",      bi_rotate_x},
+        {"rotate_y",      bi_rotate_y},
+        {"rotate_z",      bi_rotate_z},
+        {"stitch",        bi_stitch},
+        {"merge",         bi_merge},
+        {"mirror_x",      bi_mirror_x},
+        {"mirror_y",      bi_mirror_y},
+        {"mirror_z",      bi_mirror_z},
+        {"move",          bi_move},
+        {"scale",         bi_scale},
+        {"ringlist",      bi_ringlist},
+        {"cap_plane",     bi_cap_plane},
+        {"weld",          bi_weld},
 
 };
 

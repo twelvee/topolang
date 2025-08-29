@@ -145,6 +145,27 @@ static Value eval_node(Exec *E, Ast *n) {
             Value R = eval_node(E, n->add.rhs);
             return merge_meshes(E->A, L, R);
         }
+        case ND_FOR: {
+            Value va = eval_node(E, n->for_.from);
+            Value vb = eval_node(E, n->for_.to);
+            int from = (int) va.num;
+            int to = (int) vb.num;
+            int step = (from <= to) ? 1 : -1;
+            int end = to + (n->for_.inclusive ? 0 : -step);
+            for (int i = from;; i += step) {
+                Value iv;
+                memset(&iv, 0, sizeof(iv));
+                iv.k = VAL_NUMBER;
+                iv.num = (double) i;
+                setVar(E, n->for_.iter, iv);
+                (void) eval_node(E, n->for_.body);
+                if (E->hasRet) return E->ret;
+                if (i == end) break;
+            }
+            Value z;
+            memset(&z, 0, sizeof(z));
+            return z;
+        }
         case ND_NEG: {
             Value v = eval_node(E, n->un.expr);
             if (v.k == VAL_NUMBER) {
