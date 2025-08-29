@@ -14,7 +14,8 @@ typedef enum {
     ND_PROG, ND_MESH, ND_PART, ND_CREATE,
     ND_BLOCK,
     ND_ASSIGN, ND_CALL, ND_IDENT, ND_NUM, ND_STR,
-    ND_RETURN, ND_IMPORT, ND_ARRAY, ND_ADD, ND_NEG
+    ND_RETURN, ND_IMPORT, ND_ARRAY, ND_ADD, ND_NEG,
+    ND_SUB, ND_MUL, ND_DIV
 } NodeKind;
 
 typedef struct {
@@ -41,6 +42,7 @@ typedef struct {
     int pcount;
     Ast *body;
 } NdCreate;
+
 typedef struct {
     char *name;
 } NdIdent;
@@ -70,6 +72,18 @@ typedef struct Ast {
             Ast *lhs;
             Ast *rhs;
         } add;
+        struct {
+            Ast *lhs;
+            Ast *rhs;
+        } sub;
+        struct {
+            Ast *lhs;
+            Ast *rhs;
+        } mul;
+        struct {
+            Ast *lhs;
+            Ast *rhs;
+        } div;
         struct {
             Ast *expr;
         } un;

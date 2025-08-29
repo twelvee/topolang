@@ -145,20 +145,70 @@ static Ast *parse_unary(Parser *P) {
     return parse_primary(P);
 }
 
-static Ast *parse_add(Parser *P) {
+static Ast *parse_term(Parser *P) {
     Ast *lhs = parse_unary(P);
     if (!lhs) return NULL;
     skip_nl(P);
-    while (P->t.kind == TK_PLUS) {
-        next_tok(P);
-        skip_nl(P);
-        Ast *rhs = parse_unary(P);
-        if (!rhs) return NULL;
-        Ast *n = newNode(P, ND_ADD);
-        n->add.lhs = lhs;
-        n->add.rhs = rhs;
-        lhs = n;
-        skip_nl(P);
+    for (;;) {
+        if (P->t.kind == TK_STAR) {
+            next_tok(P);
+            skip_nl(P);
+            Ast *rhs = parse_unary(P);
+            if (!rhs) return NULL;
+            Ast *n = newNode(P, ND_MUL);
+            n->mul.lhs = lhs;
+            n->mul.rhs = rhs;
+            lhs = n;
+            skip_nl(P);
+            continue;
+        }
+        if (P->t.kind == TK_SLASH) {
+            next_tok(P);
+            skip_nl(P);
+            Ast *rhs = parse_unary(P);
+            if (!rhs) return NULL;
+            Ast *n = newNode(P, ND_DIV);
+            n->div.lhs = lhs;
+            n->div.rhs = rhs;
+            lhs = n;
+            skip_nl(P);
+            continue;
+        }
+        break;
+    }
+    return lhs;
+}
+
+static Ast *parse_add(Parser *P) {
+    Ast *lhs = parse_term(P);
+    if (!lhs) return NULL;
+    skip_nl(P);
+    for (;;) {
+        if (P->t.kind == TK_PLUS) {
+            next_tok(P);
+            skip_nl(P);
+            Ast *rhs = parse_term(P);
+            if (!rhs) return NULL;
+            Ast *n = newNode(P, ND_ADD);
+            n->add.lhs = lhs;
+            n->add.rhs = rhs;
+            lhs = n;
+            skip_nl(P);
+            continue;
+        }
+        if (P->t.kind == TK_MINUS) {
+            next_tok(P);
+            skip_nl(P);
+            Ast *rhs = parse_term(P);
+            if (!rhs) return NULL;
+            Ast *n = newNode(P, ND_SUB);
+            n->sub.lhs = lhs;
+            n->sub.rhs = rhs;
+            lhs = n;
+            skip_nl(P);
+            continue;
+        }
+        break;
     }
     return lhs;
 }
@@ -198,23 +248,38 @@ static Ast *parse_expr(Parser *P) {
                 acc = ident;
             }
             skip_nl(P);
-            while (P->t.kind == TK_PLUS) {
-                next_tok(P);
-                skip_nl(P);
-                Ast *rhs = parse_unary(P);
-                if (!rhs) return NULL;
-                Ast *n = newNode(P, ND_ADD);
-                n->add.lhs = acc;
-                n->add.rhs = rhs;
-                acc = n;
-                skip_nl(P);
+            for (;;) {
+                if (P->t.kind == TK_PLUS) {
+                    next_tok(P);
+                    skip_nl(P);
+                    Ast *rhs = parse_term(P);
+                    if (!rhs) return NULL;
+                    Ast *n = newNode(P, ND_ADD);
+                    n->add.lhs = acc;
+                    n->add.rhs = rhs;
+                    acc = n;
+                    skip_nl(P);
+                    continue;
+                }
+                if (P->t.kind == TK_MINUS) {
+                    next_tok(P);
+                    skip_nl(P);
+                    Ast *rhs = parse_term(P);
+                    if (!rhs) return NULL;
+                    Ast *n = newNode(P, ND_SUB);
+                    n->sub.lhs = acc;
+                    n->sub.rhs = rhs;
+                    acc = n;
+                    skip_nl(P);
+                    continue;
+                }
+                break;
             }
             return acc;
         }
     }
     return parse_add(P);
 }
-
 
 static Ast *parse_return(Parser *P) {
     Ast *n = newNode(P, ND_RETURN);
@@ -334,7 +399,6 @@ static Ast *parse_mesh(Parser *P) {
             next_tok(P);
             continue;
         }
-
         if (P->t.kind == TK_IMPORT) {
             next_tok(P);
             Token s = P->t;
@@ -345,7 +409,6 @@ static Ast *parse_mesh(Parser *P) {
             expect(P, TK_SEMI, ";");
             continue;
         }
-
         if (P->t.kind == TK_PART || P->t.kind == TK_OVERRIDE) {
             int ov = (P->t.kind == TK_OVERRIDE);
             next_tok(P);
@@ -354,7 +417,6 @@ static Ast *parse_mesh(Parser *P) {
             list_push_ast(P->A, &n->mesh.items, it);
             continue;
         }
-
         if (P->t.kind == TK_CREATE) {
             next_tok(P);
             Ast *it = newNode(P, ND_CREATE);
@@ -384,7 +446,6 @@ static Ast *parse_mesh(Parser *P) {
             list_push_ast(P->A, &n->mesh.items, it);
             continue;
         }
-
         next_tok(P);
     }
     return n;

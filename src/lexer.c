@@ -43,6 +43,17 @@ static Token keyword(Lexer *L, const char *s, int n, Token def) {
     return def;
 }
 
+static Token make_at(int line, int col, TokenKind k, const char *s, int n) {
+    Token t;
+    t.kind = k;
+    t.lexeme = s;
+    t.len = n;
+    t.line = line;
+    t.col = col;
+    t.number = 0;
+    return t;
+}
+
 Token lex_next(Lexer *L) {
     for (;;) {
         char c = *L->cur;
@@ -61,11 +72,18 @@ Token lex_next(Lexer *L) {
         }
         switch (c) {
             case '+':
+                int line = L->line, col = L->col;
                 adv(L);
-                return make(L, TK_PLUS, L->cur - 1, 1);
+                return make_at(line, col, TK_PLUS, L->cur - 1, 1);
             case '-':
                 adv(L);
                 return make(L, TK_MINUS, L->cur - 1, 1);
+            case '*':
+                adv(L);
+                return make(L, TK_STAR, L->cur - 1, 1);
+            case '/':
+                adv(L);
+                return make(L, TK_SLASH, L->cur - 1, 1);
             case '(':
                 adv(L);
                 return make(L, TK_LPAREN, L->cur - 1, 1);
@@ -112,14 +130,15 @@ Token lex_next(Lexer *L) {
                 return t;
             }
         }
-        if (isdigit((unsigned char) c) || (c == '.' && isdigit((unsigned char) L->cur[1]))) {
+        if (isdigit((unsigned char)c) || (c=='.' && isdigit((unsigned char)L->cur[1]))) {
+            int line=L->line, col=L->col;
             const char *s = L->cur;
-            int n = 0;
-            while (isdigit((unsigned char) *L->cur) || *L->cur == '.') {
-                adv(L);
-                n++;
+            int n = 0, seen_dot = 0;
+            while (isdigit((unsigned char)*L->cur) || (*L->cur == '.' && !seen_dot)) {
+                if (*L->cur == '.') seen_dot = 1;
+                adv(L); n++;
             }
-            Token t = make(L, TK_NUMBER, s, n);
+            Token t = make_at(line, col, TK_NUMBER, s, n);
             t.number = strtod(s, NULL);
             return t;
         }
