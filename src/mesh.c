@@ -115,7 +115,7 @@ static Vector3 ring_centroid(const QMesh *m, const QRing *r) {
     return c;
 }
 
-static QRing ring_inset_towards_centroid(QMesh *m, const QRing *base, float dist) {
+static QRing ring_inset_same_count(QMesh *m, const QRing *base, float dist) {
     QRing out = qr_new_with_alloc(m->alloc);
     Vector3 c = ring_centroid(m, base);
     for (int i = 0; i < base->count; i++) {
@@ -127,133 +127,164 @@ static QRing ring_inset_towards_centroid(QMesh *m, const QRing *base, float dist
     return out;
 }
 
-static float v3_dist2(Vector3 a, Vector3 b) {
-    float dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
-    return dx * dx + dy * dy + dz * dz;
-}
-
-void mesh_triangulate_quads(const QMesh *src, TMesh *out, int choose_shortest_diag, int flip_winding,
-                            void *(*alloc)(void *, size_t, size_t), void *ud) {
-    out->v = (Vector3 *) alloc(ud, sizeof(Vector3) * (size_t) src->vCount, alignof(Vector3));
-    for (int i = 0; i < src->vCount; i++) out->v[i] = src->v[i];
-    out->vCount = src->vCount;
-
-    int maxTris = src->qCount * 2;
-    out->indices = (unsigned *) alloc(ud, sizeof(unsigned) * (size_t) maxTris * 3, 4);
-    out->iCount = 0;
-
-    for (int qi = 0; qi < src->qCount; qi++) {
-        Quad q = src->q[qi];
-        int a = q.a, b = q.b, c = q.c, d = q.d;
-
-        int useAC = 1;
-        if (choose_shortest_diag) {
-            float ac2 = v3_dist2(src->v[a], src->v[c]);
-            float bd2 = v3_dist2(src->v[b], src->v[d]);
-            useAC = ac2 <= bd2;
-        }
-
-        if (useAC) {
-            if (!flip_winding) {
-                out->indices[out->iCount++] = (unsigned) a;
-                out->indices[out->iCount++] = (unsigned) b;
-                out->indices[out->iCount++] = (unsigned) c;
-                out->indices[out->iCount++] = (unsigned) a;
-                out->indices[out->iCount++] = (unsigned) c;
-                out->indices[out->iCount++] = (unsigned) d;
-            } else {
-                out->indices[out->iCount++] = (unsigned) a;
-                out->indices[out->iCount++] = (unsigned) c;
-                out->indices[out->iCount++] = (unsigned) b;
-                out->indices[out->iCount++] = (unsigned) a;
-                out->indices[out->iCount++] = (unsigned) d;
-                out->indices[out->iCount++] = (unsigned) c;
-            }
-        } else {
-            if (!flip_winding) {
-                out->indices[out->iCount++] = (unsigned) a;
-                out->indices[out->iCount++] = (unsigned) b;
-                out->indices[out->iCount++] = (unsigned) d;
-                out->indices[out->iCount++] = (unsigned) b;
-                out->indices[out->iCount++] = (unsigned) c;
-                out->indices[out->iCount++] = (unsigned) d;
-            } else {
-                out->indices[out->iCount++] = (unsigned) a;
-                out->indices[out->iCount++] = (unsigned) d;
-                out->indices[out->iCount++] = (unsigned) b;
-                out->indices[out->iCount++] = (unsigned) b;
-                out->indices[out->iCount++] = (unsigned) d;
-                out->indices[out->iCount++] = (unsigned) c;
-            }
-        }
-    }
-}
-
-static int *copy_ring_vertices_to_mesh(QMesh *dst, const QMesh *srcMesh,
-                                       const QRing *r,
-                                       void *(*alloc)(void *, size_t, size_t), void *ud) {
-    int *map = (int *) alloc(ud, sizeof(int) * (size_t) r->count, 4);
-    for (int i = 0; i < r->count; i++) {
-        int old = r->idx[i];
-        map[i] = qm_addv(dst, srcMesh->v[old]);
-    }
-    return map;
-}
-
 QMesh *cap_plane_build(QMesh *b, const QRing *outer, float inset, int steps, int flipWinding,
                        void *(*alloc)(void *, size_t, size_t), void *ud) {
+    (void) steps;
+
     QMesh *cap = (QMesh *) alloc(ud, sizeof(QMesh), 8);
     qm_init_with_alloc(cap, b->alloc);
 
     const int n = outer->count;
-    if (n < 3) return cap;
-
-    float step = (steps > 0) ? inset / (float) steps : 0.0f;
-
-    int *map_prev = copy_ring_vertices_to_mesh(cap, b, outer, alloc, ud);
-    QRing prev = *outer;
-
-    for (int s = 0; s < steps; s++) {
-        QRing curr = ring_inset_towards_centroid(b, &prev, step);
-        int *map_curr = copy_ring_vertices_to_mesh(cap, b, &curr, alloc, ud);
-
-        for (int i = 0; i < n; i++) {
-            int A = map_prev[i];
-            int B = map_prev[(i + 1) % n];
-            int C = map_curr[(i + 1) % n];
-            int D = map_curr[i];
-            if (!flipWinding) qm_addq(cap, A, B, C, D);
-            else qm_addq(cap, A, D, C, B);
-        }
-
-        map_prev = map_curr;
-        prev = curr;
+    if (n < 4 || (n % 4) != 0) {
+        return cap;
     }
 
-    Vector3 c = ring_centroid(b, &prev);
-    int ic = qm_addv(cap, c);
+    QRing rim = *outer;
+    if (inset > 0.0f) rim = ring_inset_same_count(b, outer, inset);
 
-    if ((n & 1) == 0) {
-        for (int i = 0; i < n; i += 2) {
-            int i0 = i;
-            int i1 = (i + 1) % n;
-            int i2 = (i + 2) % n;
-            int A = ic, B = map_prev[i0], C = map_prev[i1], D = map_prev[i2];
+    Vector3 *V = (Vector3 *) alloc(ud, sizeof(Vector3) * (size_t) n, alignof(Vector3));
+    for (int i = 0; i < n; i++) V[i] = b->v[rim.idx[i]];
+
+    const int k = n / 4;
+
+    Vector3 *bottom = (Vector3 *) alloc(ud, sizeof(Vector3) * (size_t) (k + 1), alignof(Vector3));
+    Vector3 *right = (Vector3 *) alloc(ud, sizeof(Vector3) * (size_t) (k + 1), alignof(Vector3));
+    Vector3 *top = (Vector3 *) alloc(ud, sizeof(Vector3) * (size_t) (k + 1), alignof(Vector3));
+    Vector3 *left = (Vector3 *) alloc(ud, sizeof(Vector3) * (size_t) (k + 1), alignof(Vector3));
+
+    for (int i = 0; i <= k; i++) bottom[i] = V[0 + i];                 // 0..k
+    for (int i = 0; i <= k; i++) right[i] = V[k + i];                 // k..2k
+    for (int i = 0; i <= k; i++) top[i] = V[2 * k + (k - i)];         // 2k..3k
+    for (int i = 0; i <= k; i++) left[i] = V[(3 * k + (k - i)) % n];   // 3k..4k
+
+    const Vector3 P00 = bottom[0];
+    const Vector3 P10 = bottom[k];
+    const Vector3 P01 = top[0];
+    const Vector3 P11 = top[k];
+
+    const int gw = k + 1, gh = k + 1;
+    int *grid = (int *) alloc(ud, sizeof(int) * (size_t) (gw * gh), 4);
+
+    for (int j = 0; j <= k; j++) {
+        for (int i = 0; i <= k; i++) {
+            const int id = j * gw + i;
+            const int onTop = (j == k);
+            const int onBottom = (j == 0);
+            const int onLeft = (i == 0);
+            const int onRight = (i == k);
+
+            if (onTop) { grid[id] = qm_addv(cap, top[i]); }
+            else if (onBottom) { grid[id] = qm_addv(cap, bottom[i]); }
+            else if (onLeft) { grid[id] = qm_addv(cap, left[j]); }
+            else if (onRight) { grid[id] = qm_addv(cap, right[j]); }
+            else {
+                const float u = (float) i / (float) k;
+                const float v = (float) j / (float) k;
+
+                Vector3 C0 = left[j], C1 = right[j];
+                Vector3 D0 = bottom[i], D1 = top[i];
+
+                Vector3 term1 = Vector3Lerp(C0, C1, u);
+                Vector3 term2 = Vector3Lerp(D0, D1, v);
+
+                Vector3 BL0 = Vector3Lerp(P00, P10, u);
+                Vector3 BL1 = Vector3Lerp(P01, P11, u);
+                Vector3 BL = Vector3Lerp(BL0, BL1, v);
+
+                Vector3 P = Vector3Subtract(Vector3Add(term1, term2), BL);
+                grid[id] = qm_addv(cap, P);
+            }
+        }
+    }
+
+    for (int j = 0; j < k; j++) {
+        for (int i = 0; i < k; i++) {
+            int A = grid[j * gw + i];
+            int B = grid[j * gw + (i + 1)];
+            int C = grid[(j + 1) * gw + (i + 1)];
+            int D = grid[(j + 1) * gw + i];
             if (!flipWinding) qm_addq(cap, A, B, C, D);
             else qm_addq(cap, A, D, C, B);
-        }
-    } else {
-        for (int i = 0; i < n; i++) {
-            int B = map_prev[i];
-            int C = map_prev[(i + 1) % n];
-            if (!flipWinding) qm_addq(cap, ic, B, C, C);
-            else qm_addq(cap, ic, C, B, B);
         }
     }
 
     return cap;
 }
 
+void mesh_weld_by_distance(QMesh *m, float eps) {
+    if (m->vCount == 0) return;
+
+    typedef struct {
+        int keyx, keyy, keyz;
+        int head;
+    } Cell;
+    // todo: use hash map
+    int cap = m->vCount * 2 + 64;
+    int *next = (int *) malloc(sizeof(int) * (size_t) m->vCount);
+    int *head = (int *) malloc(sizeof(int) * (size_t) cap);
+    for (int i = 0; i < cap; i++) head[i] = -1;
+
+    float inv = 1.0f / eps;
+    int *rep = (int *) malloc(sizeof(int) * (size_t) m->vCount);
+    for (int i = 0; i < m->vCount; i++) rep[i] = -1;
+
+    int h = 73856093; // pseudo hash
+    for (int i = 0; i < m->vCount; i++) {
+        Vector3 p = m->v[i];
+        int gx = (int) floorf(p.x * inv), gy = (int) floorf(p.y * inv), gz = (int) floorf(p.z * inv);
+        unsigned u = (unsigned) (gx * h ^ gy * 19349663 ^ gz * 83492791);
+        int bucket = (int) (u % (unsigned) cap);
+        int j = head[bucket];
+        int found = -1;
+        while (j != -1) {
+            Vector3 q = m->v[j];
+            float dx = p.x - q.x, dy = p.y - q.y, dz = p.z - q.z;
+            if (dx * dx + dy * dy + dz * dz <= eps * eps) {
+                found = j;
+                break;
+            }
+            j = next[j];
+        }
+        if (found == -1) {
+            next[i] = head[bucket];
+            head[bucket] = i;
+            rep[i] = i;
+        } else {
+            rep[i] = found;
+        }
+    }
+
+    for (int qi = 0; qi < m->qCount; qi++) {
+        Quad *q = &m->q[qi];
+        q->a = rep[q->a];
+        q->b = rep[q->b];
+        q->c = rep[q->c];
+        q->d = rep[q->d];
+    }
+
+    int *newIndex = (int *) malloc(sizeof(int) * (size_t) m->vCount);
+    int newCount = 0;
+    for (int i = 0; i < m->vCount; i++) {
+        if (rep[i] == i) newIndex[i] = newCount++;
+    }
+    Vector3 *nv = (Vector3 *) malloc(sizeof(Vector3) * (size_t) newCount);
+    for (int i = 0; i < m->vCount; i++) if (rep[i] == i) nv[newIndex[i]] = m->v[i];
+    for (int qi = 0; qi < m->qCount; qi++) {
+        Quad *q = &m->q[qi];
+        q->a = newIndex[q->a];
+        q->b = newIndex[q->b];
+        q->c = newIndex[q->c];
+        q->d = newIndex[q->d];
+    }
+    free(m->v);
+    m->v = nv;
+    m->vCount = newCount;
+
+    free(next);
+    free(head);
+    free(rep);
+    free(newIndex);
+}
 
 QRing ring_grow_out(QMesh *m, const QRing *base, float step, float dz) {
     QRing out = qr_new_with_alloc(m->alloc);

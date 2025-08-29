@@ -95,4 +95,6 @@ void mesh_mirror_z(QMesh *m, float weldEps);
 void mesh_triangulate_quads(const QMesh *src, TMesh *out, int choose_shortest_diag, int flip_winding,
                             void *(*alloc)(void *, size_t, size_t), void *ud);
 
+void mesh_weld_by_distance(QMesh *m, float eps);
+
 #endif

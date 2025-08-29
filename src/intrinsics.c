@@ -132,6 +132,19 @@ static Value bi_lift_z(Host *H, Value *args, int argc, char err[256]) {
     return VRingV(args[0].ring);
 }
 
+static Value bi_weld(Host *H, Value *args, int argc, char err[256]) {
+    if (argc < 1 || args[0].k != VAL_MESH) {
+        strcpy(err, "weld(mesh, eps=1e-6)");
+        return VVoid();
+    }
+    double eps = (argc >= 2) ? ARGNUM(1) : 1e-6;
+    QMesh *m = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
+    qm_init(m);
+    mesh_merge(m, args[0].mesh);
+    mesh_weld_by_distance(m, (float) eps);
+    return VMes(m);
+}
+
 static Value bi_cap_plane(Host *H, Value *args, int argc, char err[256]) {
     if (argc < 3 || args[0].k != VAL_RING) {
         strcpy(err, "cap_plane(ring, inset, steps, flip=0)");
@@ -140,6 +153,7 @@ static Value bi_cap_plane(Host *H, Value *args, int argc, char err[256]) {
     float inset = (float) ARGNUM(1);
     int steps = (int) ARGNUM(2);
     int flip = (argc >= 4) ? (int) ARGNUM(3) : 0;
+
     QMesh *b = ensure_builder(H);
     QMesh *cap = cap_plane_build(b, args[0].ring, inset, steps, flip, host_alloc_trampoline, H);
     return VMes(cap);
@@ -422,6 +436,8 @@ static const Builtin BI[] = {
         {"scale",     bi_scale},
         {"ringlist",  bi_ringlist},
         {"cap_plane", bi_cap_plane},
+        {"weld",      bi_weld},
+
 };
 
 const Builtin *intrinsics_table(int *outCount) {

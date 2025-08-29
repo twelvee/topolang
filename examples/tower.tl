@@ -8,10 +8,10 @@ mesh Tower {
     r5 = grow_out(r4, -0.05, 0.2);
     r6 = grow_out(r5, -0.05, 0.2);
 
-    side   = stitch([r0,r1,r2,r3,r4,r5,r6]);
-    bottom = cap_plane(r0, 0.2, 2);
-    top    = cap_plane(r6, 0.2, 2, 1);
+    side   = stitch([r0, r1, r2, r3, r4, r5, r6]);
+    bottom = cap_plane(r0, 0, 0, 0);
+    top    = cap_plane(r6, 0, 0, 1);
 
-    return merge(side, bottom, top), nil;
+    return weld(merge(side, bottom, top), 0.001), nil;
   }
 }
