@@ -115,6 +115,84 @@ static Vector3 ring_centroid(const QMesh *m, const QRing *r) {
     return c;
 }
 
+static QRing ring_inset_towards_centroid(QMesh *m, const QRing *base, float dist) {
+    QRing out = qr_new_with_alloc(m->alloc);
+    Vector3 c = ring_centroid(m, base);
+    for (int i = 0; i < base->count; i++) {
+        Vector3 p = m->v[base->idx[i]];
+        Vector3 d = Vector3Normalize(Vector3Subtract(c, p));
+        Vector3 q = (Vector3) {p.x + d.x * dist, p.y + d.y * dist, p.z + d.z * dist};
+        qr_push(&out, qm_addv(m, q));
+    }
+    return out;
+}
+
+static int *copy_ring_vertices_to_mesh(QMesh *dst, const QMesh *srcMesh,
+                                       const QRing *r,
+                                       void *(*alloc)(void *, size_t, size_t), void *ud) {
+    int *map = (int *) alloc(ud, sizeof(int) * (size_t) r->count, 4);
+    for (int i = 0; i < r->count; i++) {
+        int old = r->idx[i];
+        map[i] = qm_addv(dst, srcMesh->v[old]);
+    }
+    return map;
+}
+
+QMesh *cap_plane_build(QMesh *b, const QRing *outer, float inset, int steps, int flipWinding,
+                       void *(*alloc)(void *, size_t, size_t), void *ud) {
+    QMesh *cap = (QMesh *) alloc(ud, sizeof(QMesh), 8);
+    qm_init_with_alloc(cap, b->alloc);
+
+    const int n = outer->count;
+    if (n < 3) return cap;
+
+    float step = (steps > 0) ? inset / (float) steps : 0.0f;
+
+    int *map_prev = copy_ring_vertices_to_mesh(cap, b, outer, alloc, ud);
+    QRing prev = *outer;
+
+    for (int s = 0; s < steps; s++) {
+        QRing curr = ring_inset_towards_centroid(b, &prev, step);
+        int *map_curr = copy_ring_vertices_to_mesh(cap, b, &curr, alloc, ud);
+
+        for (int i = 0; i < n; i++) {
+            int A = map_prev[i];
+            int B = map_prev[(i + 1) % n];
+            int C = map_curr[(i + 1) % n];
+            int D = map_curr[i];
+            if (!flipWinding) qm_addq(cap, A, B, C, D);
+            else qm_addq(cap, A, D, C, B);
+        }
+
+        map_prev = map_curr;
+        prev = curr;
+    }
+
+    Vector3 c = ring_centroid(b, &prev);
+    int ic = qm_addv(cap, c);
+
+    if ((n & 1) == 0) {
+        for (int i = 0; i < n; i += 2) {
+            int i0 = i;
+            int i1 = (i + 1) % n;
+            int i2 = (i + 2) % n;
+            int A = ic, B = map_prev[i0], C = map_prev[i1], D = map_prev[i2];
+            if (!flipWinding) qm_addq(cap, A, B, C, D);
+            else qm_addq(cap, A, D, C, B);
+        }
+    } else {
+        for (int i = 0; i < n; i++) {
+            int B = map_prev[i];
+            int C = map_prev[(i + 1) % n];
+            if (!flipWinding) qm_addq(cap, ic, B, C, C);
+            else qm_addq(cap, ic, C, B, B);
+        }
+    }
+
+    return cap;
+}
+
+
 QRing ring_grow_out(QMesh *m, const QRing *base, float step, float dz) {
     QRing out = qr_new_with_alloc(m->alloc);
     Vector3 c = ring_centroid(m, base);

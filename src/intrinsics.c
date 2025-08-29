@@ -14,6 +14,11 @@ static void arena_free(void *ud, void *p) {
     (void) p;
 }
 
+static void *host_alloc_trampoline(void *ud, size_t sz, size_t align) {
+    Host *H = (Host *) ud;
+    return H->alloc(H, sz, align);
+}
+
 static QAllocator make_arena_alloc(Host *H) {
     QAllocator a = {arena_realloc, arena_free, H};
     return a;
@@ -125,6 +130,19 @@ static Value bi_lift_z(Host *H, Value *args, int argc, char err[256]) {
     qm_set_alloc(b, make_arena_alloc(H));
     ring_lift_z(b, args[0].ring, (float) ARGNUM(1));
     return VRingV(args[0].ring);
+}
+
+static Value bi_cap_plane(Host *H, Value *args, int argc, char err[256]) {
+    if (argc < 3 || args[0].k != VAL_RING) {
+        strcpy(err, "cap_plane(ring, inset, steps, flip=0)");
+        return VVoid();
+    }
+    float inset = (float) ARGNUM(1);
+    int steps = (int) ARGNUM(2);
+    int flip = (argc >= 4) ? (int) ARGNUM(3) : 0;
+    QMesh *b = ensure_builder(H);
+    QMesh *cap = cap_plane_build(b, args[0].ring, inset, steps, flip, host_alloc_trampoline, H);
+    return VMes(cap);
 }
 
 static Value bi_stitch(Host *H, Value *args, int argc, char err[256]) {
@@ -384,25 +402,26 @@ static Value bi_mesh(Host *H, Value *args, int argc, char err[256]) {
 }
 
 static const Builtin BI[] = {
-        {"vertex",   bi_vertex},
-        {"quad",     bi_quad},
-        {"mesh",     bi_mesh},
-        {"ring",     bi_ring},
-        {"grow_out", bi_grow_out},
-        {"lift_x",   bi_lift_x},
-        {"lift_y",   bi_lift_y},
-        {"lift_z",   bi_lift_z},
-        {"rotate_x", bi_rotate_x},
-        {"rotate_y", bi_rotate_y},
-        {"rotate_z", bi_rotate_z},
-        {"stitch",   bi_stitch},
-        {"merge",    bi_merge},
-        {"mirror_x", bi_mirror_x},
-        {"mirror_y", bi_mirror_y},
-        {"mirror_z", bi_mirror_z},
-        {"move",     bi_move},
-        {"scale",    bi_scale},
-        {"ringlist", bi_ringlist},
+        {"vertex",    bi_vertex},
+        {"quad",      bi_quad},
+        {"mesh",      bi_mesh},
+        {"ring",      bi_ring},
+        {"grow_out",  bi_grow_out},
+        {"lift_x",    bi_lift_x},
+        {"lift_y",    bi_lift_y},
+        {"lift_z",    bi_lift_z},
+        {"rotate_x",  bi_rotate_x},
+        {"rotate_y",  bi_rotate_y},
+        {"rotate_z",  bi_rotate_z},
+        {"stitch",    bi_stitch},
+        {"merge",     bi_merge},
+        {"mirror_x",  bi_mirror_x},
+        {"mirror_y",  bi_mirror_y},
+        {"mirror_z",  bi_mirror_z},
+        {"move",      bi_move},
+        {"scale",     bi_scale},
+        {"ringlist",  bi_ringlist},
+        {"cap_plane", bi_cap_plane},
 };
 
 const Builtin *intrinsics_table(int *outCount) {
