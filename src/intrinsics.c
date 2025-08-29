@@ -76,6 +76,30 @@ static Value bi_grow_out(Host *H, Value *args, int argc, char err[256]) {
     return VRingV(outR);
 }
 
+static Value bi_lift_x(Host *H, Value *args, int argc, char err[256]) {
+    if (argc < 2 || args[0].k != VAL_RING) {
+        strcpy(err, "lift_x(ring, dx)");
+        return VVoid();
+    }
+    QMesh *tmp = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
+    qm_init(tmp);
+    QRing *r = args[0].ring;
+    ring_lift_x(tmp, r, (float) ARGNUM(1));
+    return VRingV(r);
+}
+
+static Value bi_lift_y(Host *H, Value *args, int argc, char err[256]) {
+    if (argc < 2 || args[0].k != VAL_RING) {
+        strcpy(err, "lift_y(ring, dy)");
+        return VVoid();
+    }
+    QMesh *tmp = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
+    qm_init(tmp);
+    QRing *r = args[0].ring;
+    ring_lift_y(tmp, r, (float) ARGNUM(1));
+    return VRingV(r);
+}
+
 static Value bi_lift_z(Host *H, Value *args, int argc, char err[256]) {
     if (argc < 2 || args[0].k != VAL_RING) {
         strcpy(err, "lift_z(ring, dz)");
@@ -247,6 +271,8 @@ static const Builtin BI[] = {
         {"mesh",     bi_mesh},
         {"ring",     bi_ring},
         {"grow_out", bi_grow_out},
+        {"lift_x",   bi_lift_x},
+        {"lift_y",   bi_lift_y},
         {"lift_z",   bi_lift_z},
         {"stitch",   bi_stitch},
         {"merge",    bi_merge},

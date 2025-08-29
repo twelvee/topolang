@@ -61,6 +61,10 @@ QRing ring_ellipse(QMesh *tmp, float cx, float cy, float rx, float ry, int segme
 
 QRing ring_grow_out(QMesh *tmp, const QRing *in, float step, float dz);
 
+void ring_lift_x(QMesh *m, QRing *inout, float dx);
+
+void ring_lift_y(QMesh *m, QRing *inout, float dy);
+
 void ring_lift_z(QMesh *tmp, QRing *inout, float dz);
 
 #endif

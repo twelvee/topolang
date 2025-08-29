@@ -83,6 +83,20 @@ QRing ring_grow_out(QMesh *m, const QRing *base, float step, float dz) {
     return out;
 }
 
+void ring_lift_x(QMesh *m, QRing *r, float dx) {
+    for (int i = 0; i < r->count; i++) {
+        int id = r->idx[i];
+        m->v[id].x += dx;
+    }
+}
+
+void ring_lift_y(QMesh *m, QRing *r, float dy) {
+    for (int i = 0; i < r->count; i++) {
+        int id = r->idx[i];
+        m->v[id].y += dy;
+    }
+}
+
 void ring_lift_z(QMesh *m, QRing *r, float dz) {
     for (int i = 0; i < r->count; i++) {
         int id = r->idx[i];
