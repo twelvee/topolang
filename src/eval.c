@@ -145,6 +145,52 @@ static Value eval_node(Exec *E, Ast *n) {
             Value R = eval_node(E, n->add.rhs);
             return merge_meshes(E->A, L, R);
         }
+        case ND_SUB: {
+            Value L = eval_node(E, n->sub.lhs);
+            Value R = eval_node(E, n->sub.rhs);
+            if (L.k == VAL_NUMBER && R.k == VAL_NUMBER) {
+                Value v;
+                memset(&v, 0, sizeof(v));
+                v.k = VAL_NUMBER;
+                v.num = L.num - R.num;
+                return v;
+            }
+            Value z;
+            memset(&z, 0, sizeof(z));
+            return z;
+        }
+        case ND_MUL: {
+            Value L = eval_node(E, n->mul.lhs);
+            Value R = eval_node(E, n->mul.rhs);
+            if (L.k == VAL_NUMBER && R.k == VAL_NUMBER) {
+                Value v;
+                memset(&v, 0, sizeof(v));
+                v.k = VAL_NUMBER;
+                v.num = L.num * R.num;
+                return v;
+            }
+            Value z;
+            memset(&z, 0, sizeof(z));
+            return z;
+        }
+        case ND_DIV: {
+            Value L = eval_node(E, n->div.lhs);
+            Value R = eval_node(E, n->div.rhs);
+            if (L.k == VAL_NUMBER && R.k == VAL_NUMBER) {
+                if (R.num == 0) {
+                    strsncpy(E->err, "division by zero", 256);
+                    return L;
+                }
+                Value v;
+                memset(&v, 0, sizeof(v));
+                v.k = VAL_NUMBER;
+                v.num = L.num / R.num;
+                return v;
+            }
+            Value z;
+            memset(&z, 0, sizeof(z));
+            return z;
+        }
         case ND_FOR: {
             Value va = eval_node(E, n->for_.from);
             Value vb = eval_node(E, n->for_.to);
