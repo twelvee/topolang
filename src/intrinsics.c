@@ -1,18 +1,21 @@
 #include "intrinsics.h"
 #include <string.h>
 
-static void* arena_realloc(void *ud, void *p, size_t sz, size_t align) {
-    Host *H = (Host*)ud;
+static void *arena_realloc(void *ud, void *p, size_t sz, size_t align) {
+    Host *H = (Host *) ud;
     if (sz == 0) return p;
     void *np = H->alloc(H, sz, align);
     if (p && np) memcpy(np, p, sz);
     return np;
 }
 
-static void arena_free(void *ud, void *p) { (void)ud; (void)p; }
+static void arena_free(void *ud, void *p) {
+    (void) ud;
+    (void) p;
+}
 
 static QAllocator make_arena_alloc(Host *H) {
-    QAllocator a = { arena_realloc, arena_free, H };
+    QAllocator a = {arena_realloc, arena_free, H};
     return a;
 }
 
@@ -125,26 +128,73 @@ static Value bi_lift_z(Host *H, Value *args, int argc, char err[256]) {
 }
 
 static Value bi_stitch(Host *H, Value *args, int argc, char err[256]) {
+    QMesh *b = ensure_builder(H);
+
     if (argc == 1 && args[0].k == VAL_RINGLIST) {
-        if (args[0].ringlist.count < 2) {
+        int n = args[0].ringlist.count;
+        if (n < 2) {
             QMesh *empty = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
             qm_init(empty);
             return VMes(empty);
         }
         QMesh *m = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
         qm_init(m);
-        for (int i = 0; i < args[0].ringlist.count - 1; i++) {
-            stitch(m, &args[0].ringlist.data[i], &args[0].ringlist.data[i + 1]);
+
+        QRing *src = args[0].ringlist.data;
+        QRing *remap = (QRing *) H->alloc(H, sizeof(QRing) * (size_t) n, 8);
+
+        for (int i = 0; i < n; i++) {
+            remap[i].count = src[i].count;
+            remap[i].cap = src[i].count;
+            remap[i].alloc = (QAllocator) {0};
+            remap[i].idx = (int *) H->alloc(H, sizeof(int) * (size_t) src[i].count, 4);
+            for (int k = 0; k < src[i].count; k++) {
+                int old = src[i].idx[k];
+                int neu = qm_addv(m, b->v[old]);
+                remap[i].idx[k] = neu;
+            }
+        }
+
+        for (int i = 0; i < n - 1; i++) {
+            stitch(m, &remap[i], &remap[i + 1]);
         }
         return VMes(m);
     }
+
     if (argc == 2 && args[0].k == VAL_RING && args[1].k == VAL_RING) {
         QMesh *m = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
         qm_init(m);
-        stitch(m, args[0].ring, args[1].ring);
+
+        const QRing *a = args[0].ring;
+        const QRing *bR = args[1].ring;
+
+        QRing A, B;
+        A.count = a->count;
+        A.cap = a->count;
+        A.alloc = (QAllocator) {0};
+        B.count = bR->count;
+        B.cap = bR->count;
+        B.alloc = (QAllocator) {0};
+
+        A.idx = (int *) H->alloc(H, sizeof(int) * (size_t) a->count, 4);
+        B.idx = (int *) H->alloc(H, sizeof(int) * (size_t) bR->count, 4);
+
+        for (int k = 0; k < a->count; k++) {
+            int old = a->idx[k];
+            int neu = qm_addv(m, b->v[old]);
+            A.idx[k] = neu;
+        }
+        for (int k = 0; k < bR->count; k++) {
+            int old = bR->idx[k];
+            int neu = qm_addv(m, b->v[old]);
+            B.idx[k] = neu;
+        }
+
+        stitch(m, &A, &B);
         return VMes(m);
     }
-    strcpy(err, "stitch([rings...]) or stitch(rA,rB)");
+
+    strcpy(err, "stitch([rings...]) or stitch(rA, rB)");
     return VVoid();
 }
 
