@@ -153,3 +153,41 @@ void mesh_mirror_x(QMesh *m, float weldEps) {
     }
     for (int i = 0; i < m->vCount; i++) { if (fabsf(m->v[i].x) < weldEps) m->v[i].x = 0.f; }
 }
+
+void mesh_mirror_y(QMesh *m, float weldEps) {
+    int v0 = m->vCount;
+    for (int i = 0; i < v0; i++) {
+        Vector3 p = m->v[i];
+        p.y = -p.y;
+        qm_addv(m, p);
+    }
+
+    int q0 = m->qCount;
+    for (int i = 0; i < q0; i++) {
+        Quad q = m->q[i];
+        qm_addq(m, q.d + v0, q.c + v0, q.b + v0, q.a + v0);
+    }
+
+    for (int i = 0; i < m->vCount; i++) {
+        if (fabsf(m->v[i].y) < weldEps) m->v[i].y = 0.f;
+    }
+}
+
+void mesh_mirror_z(QMesh *m, float weldEps) {
+    int v0 = m->vCount;
+    for (int i = 0; i < v0; i++) {
+        Vector3 p = m->v[i];
+        p.z = -p.z;
+        qm_addv(m, p);
+    }
+
+    int q0 = m->qCount;
+    for (int i = 0; i < q0; i++) {
+        Quad q = m->q[i];
+        qm_addq(m, q.d + v0, q.c + v0, q.b + v0, q.a + v0);
+    }
+
+    for (int i = 0; i < m->vCount; i++) {
+        if (fabsf(m->v[i].z) < weldEps) m->v[i].z = 0.f;
+    }
+}

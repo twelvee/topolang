@@ -47,6 +47,10 @@ void mesh_merge(QMesh *dst, const QMesh *src);
 
 void mesh_mirror_x(QMesh *m, float weld);
 
+void mesh_mirror_y(QMesh *m, float weld);
+
+void mesh_mirror_z(QMesh *m, float weld);
+
 void mesh_move(QMesh *m, float dx, float dy, float dz);
 
 void mesh_scale(QMesh *m, float sx, float sy, float sz);

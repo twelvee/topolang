@@ -130,6 +130,32 @@ static Value bi_mirror_x(Host *H, Value *args, int argc, char err[256]) {
     return VMes(m);
 }
 
+static Value bi_mirror_y(Host *H, Value *args, int argc, char err[256]) {
+    if (argc < 1 || args[0].k != VAL_MESH) {
+        strcpy(err, "mirror_y(mesh, weld)");
+        return VVoid();
+    }
+    double weld = (argc >= 2) ? ARGNUM(1) : 1e-6;
+    QMesh *m = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
+    qm_init(m);
+    mesh_merge(m, args[0].mesh);
+    mesh_mirror_y(m, (float) weld);
+    return VMes(m);
+}
+
+static Value bi_mirror_z(Host *H, Value *args, int argc, char err[256]) {
+    if (argc < 1 || args[0].k != VAL_MESH) {
+        strcpy(err, "mirror_z(mesh, weld)");
+        return VVoid();
+    }
+    double weld = (argc >= 2) ? ARGNUM(1) : 1e-6;
+    QMesh *m = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
+    qm_init(m);
+    mesh_merge(m, args[0].mesh);
+    mesh_mirror_z(m, (float) weld);
+    return VMes(m);
+}
+
 static Value bi_move(Host *H, Value *args, int argc, char err[256]) {
     if (argc < 4 || args[0].k != VAL_MESH) {
         strcpy(err, "move(mesh,dx,dy,dz)");
@@ -225,6 +251,8 @@ static const Builtin BI[] = {
         {"stitch",   bi_stitch},
         {"merge",    bi_merge},
         {"mirror_x", bi_mirror_x},
+        {"mirror_y", bi_mirror_y},
+        {"mirror_z", bi_mirror_z},
         {"move",     bi_move},
         {"scale",    bi_scale},
         {"ringlist", bi_ringlist},
