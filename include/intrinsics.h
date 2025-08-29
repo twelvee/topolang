@@ -15,7 +15,7 @@ typedef struct {
         QMesh *mesh;
         QRing *ring;
         struct {
-            QRing *data;
+            QRing **ptrs;
             int count;
         } ringlist;
     };

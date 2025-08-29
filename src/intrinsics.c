@@ -48,11 +48,11 @@ static Value VRingV(QRing *r) {
     return v;
 }
 
-static Value VRingList(QRing *r, int n) {
+static Value VRingListPtrs(QRing **p, int n) {
     Value v;
     memset(&v, 0, sizeof(v));
     v.k = VAL_RINGLIST;
-    v.ringlist.data = r;
+    v.ringlist.ptrs = p;
     v.ringlist.count = n;
     return v;
 }
@@ -169,16 +169,16 @@ static Value bi_stitch(Host *H, Value *args, int argc, char err[256]) {
         QMesh *m = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
         qm_init(m);
 
-        QRing *src = args[0].ringlist.data;
+        QRing **src = args[0].ringlist.ptrs;
         QRing *remap = (QRing *) H->alloc(H, sizeof(QRing) * (size_t) n, 8);
 
         for (int i = 0; i < n; i++) {
-            remap[i].count = src[i].count;
-            remap[i].cap = src[i].count;
+            remap[i].count = src[i]->count;
+            remap[i].cap = src[i]->count;
             remap[i].alloc = (QAllocator) {0};
-            remap[i].idx = (int *) H->alloc(H, sizeof(int) * (size_t) src[i].count, 4);
-            for (int k = 0; k < src[i].count; k++) {
-                int old = src[i].idx[k];
+            remap[i].idx = (int *) H->alloc(H, sizeof(int) * (size_t) src[i]->count, 4);
+            for (int k = 0; k < src[i]->count; k++) {
+                int old = src[i]->idx[k];
                 int neu = qm_addv(m, b->v[old]);
                 remap[i].idx[k] = neu;
             }
@@ -224,6 +224,7 @@ static Value bi_stitch(Host *H, Value *args, int argc, char err[256]) {
     }
 
     strcpy(err, "stitch([rings...]) or stitch(rA, rB)");
+
     return VVoid();
 }
 
@@ -352,9 +353,10 @@ static Value bi_ringlist(Host *H, Value *args, int argc, char err[256]) {
             return VVoid();
         }
     }
-    QRing *arr = (QRing *) H->alloc(H, sizeof(QRing) * (size_t) argc, 8);
-    for (int i = 0; i < argc; i++) arr[i] = *args[i].ring;
-    return VRingList(arr, argc);
+    QRing **arr = (QRing **) H->alloc(H, sizeof(QRing *) * (size_t) argc, 8);
+    for (int i = 0; i < argc; i++) arr[i] = args[i].ring;
+
+    return VRingListPtrs(arr, argc);
 }
 
 static Value bi_ringlist_push(Host *H, Value *args, int argc, char err[256]) {
@@ -363,11 +365,12 @@ static Value bi_ringlist_push(Host *H, Value *args, int argc, char err[256]) {
         return VVoid();
     }
     int n = args[0].ringlist.count;
-    QRing *src = args[0].ringlist.data;
-    QRing *arr = (QRing *) H->alloc(H, sizeof(QRing) * (size_t) (n + 1), 8);
-    if (n > 0) memcpy(arr, src, sizeof(QRing) * (size_t) n);
-    arr[n] = *args[1].ring;
-    return VRingList(arr, n + 1);
+    QRing **src = args[0].ringlist.ptrs;
+    QRing **arr = (QRing **) H->alloc(H, sizeof(QRing *) * (size_t) (n + 1), 8);
+    if (n > 0) memcpy(arr, src, sizeof(QRing *) * (size_t) n);
+    arr[n] = args[1].ring;
+
+    return VRingListPtrs(arr, n + 1);
 }
 
 static Value bi_first(Host *H, Value *args, int argc, char err[256]) {
@@ -375,7 +378,8 @@ static Value bi_first(Host *H, Value *args, int argc, char err[256]) {
         strcpy(err, "first(ringlist)");
         return VVoid();
     }
-    return VRingV(&args[0].ringlist.data[0]);
+
+    return VRingV(args[0].ringlist.ptrs[0]);
 }
 
 static Value bi_last(Host *H, Value *args, int argc, char err[256]) {
@@ -383,7 +387,8 @@ static Value bi_last(Host *H, Value *args, int argc, char err[256]) {
         strcpy(err, "last(ringlist)");
         return VVoid();
     }
-    return VRingV(&args[0].ringlist.data[args[0].ringlist.count - 1]);
+
+    return VRingV(args[0].ringlist.ptrs[args[0].ringlist.count - 1]);
 }
 
 
@@ -396,12 +401,14 @@ static Value bi_vertex(Host *H, Value *args, int argc, char err[256]) {
     qm_set_alloc(b, make_arena_alloc(H));
     Vector3 p = (Vector3) {(float) ARGNUM(0), (float) ARGNUM(1), (float) ARGNUM(2)};
     int idx = qm_addv(b, p);
+
     return VNum((double) idx);
 }
 
 static Value bi_quad(Host *H, Value *args, int argc, char err[256]) {
     if (argc < 4) {
         strcpy(err, "quad(a,b,c,d)");
+
         return VVoid();
     }
     QMesh *b = ensure_builder(H);
@@ -410,6 +417,7 @@ static Value bi_quad(Host *H, Value *args, int argc, char err[256]) {
     int vcount = b->vCount;
     if (ia < 0 || ib < 0 || ic < 0 || id < 0 || ia >= vcount || ib >= vcount || ic >= vcount || id >= vcount) {
         strcpy(err, "quad: vertex index out of range");
+
         return VVoid();
     }
     QMesh *m = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
@@ -419,6 +427,7 @@ static Value bi_quad(Host *H, Value *args, int argc, char err[256]) {
     int c1 = qm_addv(m, b->v[ic]);
     int d = qm_addv(m, b->v[id]);
     qm_addq(m, a, b1, c1, d);
+
     return VMes(m);
 }
 
