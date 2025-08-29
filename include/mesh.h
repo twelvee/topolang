@@ -25,6 +25,13 @@ typedef struct {
 } QMesh;
 
 typedef struct {
+    Vector3 *v;
+    int vCount;
+    unsigned *indices;
+    int iCount;
+} TMesh;
+
+typedef struct {
     int *idx;
     int count, cap;
     QAllocator alloc;
@@ -84,5 +91,8 @@ void mesh_mirror_x(QMesh *m, float weldEps);
 void mesh_mirror_y(QMesh *m, float weldEps);
 
 void mesh_mirror_z(QMesh *m, float weldEps);
+
+void mesh_triangulate_quads(const QMesh *src, TMesh *out, int choose_shortest_diag, int flip_winding,
+                            void *(*alloc)(void *, size_t, size_t), void *ud);
 
 #endif

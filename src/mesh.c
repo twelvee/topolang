@@ -127,6 +127,68 @@ static QRing ring_inset_towards_centroid(QMesh *m, const QRing *base, float dist
     return out;
 }
 
+static float v3_dist2(Vector3 a, Vector3 b) {
+    float dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
+    return dx * dx + dy * dy + dz * dz;
+}
+
+void mesh_triangulate_quads(const QMesh *src, TMesh *out, int choose_shortest_diag, int flip_winding,
+                            void *(*alloc)(void *, size_t, size_t), void *ud) {
+    out->v = (Vector3 *) alloc(ud, sizeof(Vector3) * (size_t) src->vCount, alignof(Vector3));
+    for (int i = 0; i < src->vCount; i++) out->v[i] = src->v[i];
+    out->vCount = src->vCount;
+
+    int maxTris = src->qCount * 2;
+    out->indices = (unsigned *) alloc(ud, sizeof(unsigned) * (size_t) maxTris * 3, 4);
+    out->iCount = 0;
+
+    for (int qi = 0; qi < src->qCount; qi++) {
+        Quad q = src->q[qi];
+        int a = q.a, b = q.b, c = q.c, d = q.d;
+
+        int useAC = 1;
+        if (choose_shortest_diag) {
+            float ac2 = v3_dist2(src->v[a], src->v[c]);
+            float bd2 = v3_dist2(src->v[b], src->v[d]);
+            useAC = ac2 <= bd2;
+        }
+
+        if (useAC) {
+            if (!flip_winding) {
+                out->indices[out->iCount++] = (unsigned) a;
+                out->indices[out->iCount++] = (unsigned) b;
+                out->indices[out->iCount++] = (unsigned) c;
+                out->indices[out->iCount++] = (unsigned) a;
+                out->indices[out->iCount++] = (unsigned) c;
+                out->indices[out->iCount++] = (unsigned) d;
+            } else {
+                out->indices[out->iCount++] = (unsigned) a;
+                out->indices[out->iCount++] = (unsigned) c;
+                out->indices[out->iCount++] = (unsigned) b;
+                out->indices[out->iCount++] = (unsigned) a;
+                out->indices[out->iCount++] = (unsigned) d;
+                out->indices[out->iCount++] = (unsigned) c;
+            }
+        } else {
+            if (!flip_winding) {
+                out->indices[out->iCount++] = (unsigned) a;
+                out->indices[out->iCount++] = (unsigned) b;
+                out->indices[out->iCount++] = (unsigned) d;
+                out->indices[out->iCount++] = (unsigned) b;
+                out->indices[out->iCount++] = (unsigned) c;
+                out->indices[out->iCount++] = (unsigned) d;
+            } else {
+                out->indices[out->iCount++] = (unsigned) a;
+                out->indices[out->iCount++] = (unsigned) d;
+                out->indices[out->iCount++] = (unsigned) b;
+                out->indices[out->iCount++] = (unsigned) b;
+                out->indices[out->iCount++] = (unsigned) d;
+                out->indices[out->iCount++] = (unsigned) c;
+            }
+        }
+    }
+}
+
 static int *copy_ring_vertices_to_mesh(QMesh *dst, const QMesh *srcMesh,
                                        const QRing *r,
                                        void *(*alloc)(void *, size_t, size_t), void *ud) {

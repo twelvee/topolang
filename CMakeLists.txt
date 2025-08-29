@@ -24,6 +24,7 @@ add_library(topolang
         src/eval.c
         src/gltf.c
         src/topolang.c
+        src/obj.c
 )
 
 target_include_directories(topolang PUBLIC

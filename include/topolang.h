@@ -47,6 +47,10 @@ bool topo_execute(const TopoProgram *prog, const char *entryMeshName,
 
 bool topo_export_gltf(const TopoScene *scene, const char *outGltfPath, TopoError *err);
 
+bool topo_export_obj_ex(const TopoScene *scene, const char *outObjPath, int triangulate, TopoError *err);
+
+bool topo_export_obj(const TopoScene *scene, const char *outObjPath, TopoError *err);
+
 void topo_free_scene(TopoScene *s);
 
 void topo_free_mesh(TopoMesh *m);
