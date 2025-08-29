@@ -67,8 +67,7 @@ void ring_lift_y(QMesh *m, QRing *r, float dy);
 
 void ring_lift_z(QMesh *m, QRing *r, float dz);
 
-QMesh *cap_plane_build(QMesh *b, const QRing *outer, float inset, int steps, int flipWinding,
-                       void *(*alloc)(void *, size_t, size_t), void *ud);
+QMesh *cap_plane_build(QMesh *b, const QRing *outer, void *(*alloc)(void *, size_t, size_t), void *ud);
 
 bool stitch(QMesh *m, const QRing *a, const QRing *b);
 

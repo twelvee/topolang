@@ -146,16 +146,13 @@ static Value bi_weld(Host *H, Value *args, int argc, char err[256]) {
 }
 
 static Value bi_cap_plane(Host *H, Value *args, int argc, char err[256]) {
-    if (argc < 3 || args[0].k != VAL_RING) {
-        strcpy(err, "cap_plane(ring, inset, steps, flip=0)");
+    if (argc < 1 || args[0].k != VAL_RING) {
+        strcpy(err, "cap_plane(ring)");
         return VVoid();
     }
-    float inset = (float) ARGNUM(1);
-    int steps = (int) ARGNUM(2);
-    int flip = (argc >= 4) ? (int) ARGNUM(3) : 0;
 
     QMesh *b = ensure_builder(H);
-    QMesh *cap = cap_plane_build(b, args[0].ring, inset, steps, flip, host_alloc_trampoline, H);
+    QMesh *cap = cap_plane_build(b, args[0].ring, host_alloc_trampoline, H);
     return VMes(cap);
 }
 

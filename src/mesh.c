@@ -127,9 +127,7 @@ static QRing ring_inset_same_count(QMesh *m, const QRing *base, float dist) {
     return out;
 }
 
-QMesh *cap_plane_build(QMesh *b, const QRing *outer, float inset, int steps, int flipWinding,
-                       void *(*alloc)(void *, size_t, size_t), void *ud) {
-    (void) steps;
+QMesh *cap_plane_build(QMesh *b, const QRing *outer, void *(*alloc)(void *, size_t, size_t), void *ud) {
 
     QMesh *cap = (QMesh *) alloc(ud, sizeof(QMesh), 8);
     qm_init_with_alloc(cap, b->alloc);
@@ -140,7 +138,6 @@ QMesh *cap_plane_build(QMesh *b, const QRing *outer, float inset, int steps, int
     }
 
     QRing rim = *outer;
-    if (inset > 0.0f) rim = ring_inset_same_count(b, outer, inset);
 
     Vector3 *V = (Vector3 *) alloc(ud, sizeof(Vector3) * (size_t) n, alignof(Vector3));
     for (int i = 0; i < n; i++) V[i] = b->v[rim.idx[i]];
@@ -203,8 +200,8 @@ QMesh *cap_plane_build(QMesh *b, const QRing *outer, float inset, int steps, int
             int B = grid[j * gw + (i + 1)];
             int C = grid[(j + 1) * gw + (i + 1)];
             int D = grid[(j + 1) * gw + i];
-            if (!flipWinding) qm_addq(cap, A, B, C, D);
-            else qm_addq(cap, A, D, C, B);
+
+            qm_addq(cap, A, B, C, D);
         }
     }
 
