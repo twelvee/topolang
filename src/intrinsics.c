@@ -1,6 +1,21 @@
 #include "intrinsics.h"
 #include <string.h>
 
+static void* arena_realloc(void *ud, void *p, size_t sz, size_t align) {
+    Host *H = (Host*)ud;
+    if (sz == 0) return p;
+    void *np = H->alloc(H, sz, align);
+    if (p && np) memcpy(np, p, sz);
+    return np;
+}
+
+static void arena_free(void *ud, void *p) { (void)ud; (void)p; }
+
+static QAllocator make_arena_alloc(Host *H) {
+    QAllocator a = { arena_realloc, arena_free, H };
+    return a;
+}
+
 static Value VNum(double x) {
     Value v;
     memset(&v, 0, sizeof(v));
@@ -57,10 +72,10 @@ static Value bi_ring(Host *H, Value *args, int argc, char err[256]) {
         strcpy(err, "ring(cx,cy,rx,ry,segments)");
         return VVoid();
     }
-    QMesh *tmp = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
-    qm_init(tmp);
+    QMesh *b = ensure_builder(H);
+    qm_set_alloc(b, make_arena_alloc(H));
     QRing *r = (QRing *) H->alloc(H, sizeof(QRing), 8);
-    *r = ring_ellipse(tmp, (float) ARGNUM(0), (float) ARGNUM(1), (float) ARGNUM(2), (float) ARGNUM(3), (int) ARGNUM(4));
+    *r = ring_ellipse(b, (float) ARGNUM(0), (float) ARGNUM(1), (float) ARGNUM(2), (float) ARGNUM(3), (int) ARGNUM(4));
     return VRingV(r);
 }
 
@@ -69,10 +84,10 @@ static Value bi_grow_out(Host *H, Value *args, int argc, char err[256]) {
         strcpy(err, "grow_out(ring, step, dz)");
         return VVoid();
     }
-    QMesh *tmp = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
-    qm_init(tmp);
+    QMesh *b = ensure_builder(H);
+    qm_set_alloc(b, make_arena_alloc(H));
     QRing *outR = (QRing *) H->alloc(H, sizeof(QRing), 8);
-    *outR = ring_grow_out(tmp, args[0].ring, (float) ARGNUM(1), (float) ARGNUM(2));
+    *outR = ring_grow_out(b, args[0].ring, (float) ARGNUM(1), (float) ARGNUM(2));
     return VRingV(outR);
 }
 
@@ -81,11 +96,10 @@ static Value bi_lift_x(Host *H, Value *args, int argc, char err[256]) {
         strcpy(err, "lift_x(ring, dx)");
         return VVoid();
     }
-    QMesh *tmp = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
-    qm_init(tmp);
-    QRing *r = args[0].ring;
-    ring_lift_x(tmp, r, (float) ARGNUM(1));
-    return VRingV(r);
+    QMesh *b = ensure_builder(H);
+    qm_set_alloc(b, make_arena_alloc(H));
+    ring_lift_x(b, args[0].ring, (float) ARGNUM(1));
+    return VRingV(args[0].ring);
 }
 
 static Value bi_lift_y(Host *H, Value *args, int argc, char err[256]) {
@@ -93,11 +107,10 @@ static Value bi_lift_y(Host *H, Value *args, int argc, char err[256]) {
         strcpy(err, "lift_y(ring, dy)");
         return VVoid();
     }
-    QMesh *tmp = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
-    qm_init(tmp);
-    QRing *r = args[0].ring;
-    ring_lift_y(tmp, r, (float) ARGNUM(1));
-    return VRingV(r);
+    QMesh *b = ensure_builder(H);
+    qm_set_alloc(b, make_arena_alloc(H));
+    ring_lift_y(b, args[0].ring, (float) ARGNUM(1));
+    return VRingV(args[0].ring);
 }
 
 static Value bi_lift_z(Host *H, Value *args, int argc, char err[256]) {
@@ -105,37 +118,46 @@ static Value bi_lift_z(Host *H, Value *args, int argc, char err[256]) {
         strcpy(err, "lift_z(ring, dz)");
         return VVoid();
     }
-    QMesh *tmp = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
-    qm_init(tmp);
-    QRing *r = args[0].ring;
-    ring_lift_z(tmp, r, (float) ARGNUM(1));
-    return VRingV(r);
+    QMesh *b = ensure_builder(H);
+    qm_set_alloc(b, make_arena_alloc(H));
+    ring_lift_z(b, args[0].ring, (float) ARGNUM(1));
+    return VRingV(args[0].ring);
 }
 
 static Value bi_stitch(Host *H, Value *args, int argc, char err[256]) {
-    QMesh *m = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
-    qm_init(m);
     if (argc == 1 && args[0].k == VAL_RINGLIST) {
-        for (int i = 0; i < args[0].ringlist.count - 1; i++)
+        if (args[0].ringlist.count < 2) {
+            QMesh *empty = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
+            qm_init(empty);
+            return VMes(empty);
+        }
+        QMesh *m = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
+        qm_init(m);
+        for (int i = 0; i < args[0].ringlist.count - 1; i++) {
             stitch(m, &args[0].ringlist.data[i], &args[0].ringlist.data[i + 1]);
+        }
         return VMes(m);
     }
     if (argc == 2 && args[0].k == VAL_RING && args[1].k == VAL_RING) {
+        QMesh *m = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
+        qm_init(m);
         stitch(m, args[0].ring, args[1].ring);
         return VMes(m);
     }
-    strcpy(err, "stitch([rings...]) или stitch(rA,rB)");
+    strcpy(err, "stitch([rings...]) or stitch(rA,rB)");
     return VVoid();
 }
 
 static Value bi_merge(Host *H, Value *args, int argc, char err[256]) {
-    QMesh *m = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
-    qm_init(m);
     for (int i = 0; i < argc; i++) {
         if (args[i].k != VAL_MESH) {
             strcpy(err, "merge(mesh,...)");
             return VVoid();
         }
+    }
+    QMesh *m = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
+    qm_init(m);
+    for (int i = 0; i < argc; i++) {
         mesh_merge(m, args[i].mesh);
     }
     return VMes(m);
@@ -241,14 +263,18 @@ static Value bi_scale(Host *H, Value *args, int argc, char err[256]) {
 }
 
 static Value bi_ringlist(Host *H, Value *args, int argc, char err[256]) {
-    QRing *arr = (QRing *) H->alloc(H, sizeof(QRing) * (size_t) argc, 8);
+    if (argc < 1) {
+        strcpy(err, "ringlist(r0,r1,...)");
+        return VVoid();
+    }
     for (int i = 0; i < argc; i++) {
         if (args[i].k != VAL_RING) {
             strcpy(err, "ringlist(r0,r1,...) accept only rings");
             return VVoid();
         }
-        arr[i] = *args[i].ring;
     }
+    QRing *arr = (QRing *) H->alloc(H, sizeof(QRing) * (size_t) argc, 8);
+    for (int i = 0; i < argc; i++) arr[i] = *args[i].ring;
     return VRingList(arr, argc);
 }
 
@@ -258,6 +284,7 @@ static Value bi_vertex(Host *H, Value *args, int argc, char err[256]) {
         return VVoid();
     }
     QMesh *b = ensure_builder(H);
+    qm_set_alloc(b, make_arena_alloc(H));
     Vector3 p = (Vector3) {(float) ARGNUM(0), (float) ARGNUM(1), (float) ARGNUM(2)};
     int idx = qm_addv(b, p);
     return VNum((double) idx);
@@ -269,14 +296,19 @@ static Value bi_quad(Host *H, Value *args, int argc, char err[256]) {
         return VVoid();
     }
     QMesh *b = ensure_builder(H);
+    qm_set_alloc(b, make_arena_alloc(H));
     int ia = (int) ARGNUM(0), ib = (int) ARGNUM(1), ic = (int) ARGNUM(2), id = (int) ARGNUM(3);
-    if (ia < 0 || ib < 0 || ic < 0 || id < 0 || ia >= qm_addv(b, (Vector3) {0, 0, 0}) - 1) {}
+    int vcount = b->vCount;
+    if (ia < 0 || ib < 0 || ic < 0 || id < 0 || ia >= vcount || ib >= vcount || ic >= vcount || id >= vcount) {
+        strcpy(err, "quad: vertex index out of range");
+        return VVoid();
+    }
     QMesh *m = (QMesh *) H->alloc(H, sizeof(QMesh), 8);
     qm_init(m);
-    int a = qm_addv(m, ((Vector3 *) (&b->v[0]))[ia]);
-    int b1 = qm_addv(m, ((Vector3 *) (&b->v[0]))[ib]);
-    int c1 = qm_addv(m, ((Vector3 *) (&b->v[0]))[ic]);
-    int d = qm_addv(m, ((Vector3 *) (&b->v[0]))[id]);
+    int a = qm_addv(m, b->v[ia]);
+    int b1 = qm_addv(m, b->v[ib]);
+    int c1 = qm_addv(m, b->v[ic]);
+    int d = qm_addv(m, b->v[id]);
     qm_addq(m, a, b1, c1, d);
     return VMes(m);
 }
