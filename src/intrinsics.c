@@ -1,5 +1,7 @@
 #include "intrinsics.h"
+#include "util.h"
 #include <string.h>
+#include <stdio.h>
 
 static void *arena_realloc(void *ud, void *p, size_t sz, size_t align) {
     Host *H = (Host *) ud;
@@ -435,6 +437,21 @@ static Value bi_mesh(Host *H, Value *args, int argc, char err[256]) {
     return VMes(empty);
 }
 
+static Value bi_error(Host *H, Value *args, int argc, char err[256]) {
+    if (argc != 1) {
+        strcpy(err, "error(value)");
+        return VVoid();
+    }
+    if (args[0].k == VAL_STRING) {
+        snprintf(err, 256, "%s", args[0].str.s ? args[0].str.s : "");
+        return VVoid();
+    }
+    char buf[256];
+    value_to_string(H, args[0], buf);
+    snprintf(err, 256, "%s", buf);
+    return VVoid();
+}
+
 static const Builtin BI[] = {
         {"vertex",        bi_vertex},
         {"quad",          bi_quad},
@@ -460,7 +477,7 @@ static const Builtin BI[] = {
         {"ringlist",      bi_ringlist},
         {"cap_plane",     bi_cap_plane},
         {"weld",          bi_weld},
-
+        {"error",         bi_error},
 };
 
 const Builtin *intrinsics_table(int *outCount) {

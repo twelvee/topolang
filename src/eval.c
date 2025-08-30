@@ -31,38 +31,6 @@ typedef struct {
     Value ret;
 } Exec;
 
-static int map_type(const char *t) {
-    if (!t) return -1;
-    if (!strcmp(t, "number")) return VAL_NUMBER;
-    if (!strcmp(t, "string")) return VAL_STRING;
-    if (!strcmp(t, "ring")) return VAL_RING;
-    if (!strcmp(t, "ringlist")) return VAL_RINGLIST;
-    if (!strcmp(t, "mesh")) return VAL_MESH;
-    if (!strcmp(t, "void")) return VAL_VOID;
-    return -1;
-}
-
-static int value_is_kind(Value v, int k) { return k < 0 ? 1 : (int) v.k == k; }
-
-static const char *val_kind_str(int k) {
-    switch (k) {
-        case VAL_NUMBER:
-            return "number";
-        case VAL_STRING:
-            return "string";
-        case VAL_RING:
-            return "ring";
-        case VAL_RINGLIST:
-            return "ringlist";
-        case VAL_MESH:
-            return "mesh";
-        case VAL_VOID:
-            return "void";
-        default:
-            return "unknown";
-    }
-}
-
 static void *host_arena_alloc(struct Host *H, size_t sz, size_t align) { return arena_alloc(H->arena, sz, align); }
 
 static Value zero_val() {
