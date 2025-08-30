@@ -17,13 +17,19 @@ typedef enum {
     ND_RETURN, ND_IMPORT, ND_ARRAY, ND_ADD, ND_NEG,
     ND_SUB, ND_MUL, ND_DIV,
     ND_FOR,
-    ND_CONST
+    ND_CONST,
+    ND_FUNC
 } NodeKind;
 
 typedef struct {
     char *name;
     Ast *value;
 } Param;
+
+typedef struct {
+    char *type;
+    char *name;
+} FParam;
 
 typedef struct {
     char *name;
@@ -71,6 +77,15 @@ typedef struct {
     Ast *expr;
 } NdConst;
 
+typedef struct {
+    char *name;
+    FParam *params;
+    int pcount;
+    char **rets;
+    int rcount;
+    Ast *body;
+} NdFunc;
+
 typedef struct Ast {
     NodeKind kind;
     int line, col;
@@ -117,6 +132,7 @@ typedef struct Ast {
         } import_;
         NdFor for_;
         NdConst const_;
+        NdFunc func;
     };
 } Ast;
 

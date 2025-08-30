@@ -123,7 +123,7 @@ topo_execute(const TopoProgram *prog, const char *entryMeshName, TopoArena *A, T
     for (int i = 0; i < prog->gcount; i++) astlist_push(A, &wrapper->block.stmts, prog->globals[i]);
     for (int i = 0; i < mesh->mesh.items.count; i++) {
         Ast *it = mesh->mesh.items.data[i];
-        if (it->kind == ND_CONST) astlist_push(A, &wrapper->block.stmts, it);
+        if (it->kind == ND_CONST || it->kind == ND_FUNC) astlist_push(A, &wrapper->block.stmts, it);
     }
     astlist_push(A, &wrapper->block.stmts, createBody);
 

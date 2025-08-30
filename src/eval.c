@@ -11,9 +11,19 @@ typedef struct {
     Value val;
     int isConst;
 } Var;
+
+typedef struct {
+    const char *name;
+    Ast *fn;
+    Var *env;
+    int envCount;
+} FnDef;
+
 typedef struct {
     Var *vars;
     int vcount, vcap;
+    FnDef *fns;
+    int fcount, fcap;
     Host host;
     TopoArena *A;
     char err[256];
@@ -67,6 +77,28 @@ static Value getVar(Exec *E, const char *name) {
     return zero_val();
 }
 
+static void push_fn(Exec *E, const char *name, Ast *fn) {
+    if (E->fcount >= E->fcap) {
+        int nc = E->fcap ? E->fcap * 2 : 16;
+        FnDef *neu = (FnDef *) arena_alloc(E->A, sizeof(FnDef) * (size_t) nc, 8);
+        if (E->fns) memcpy(neu, E->fns, sizeof(FnDef) * (size_t) E->fcount);
+        E->fns = neu;
+        E->fcap = nc;
+    }
+    FnDef d;
+    d.name = name;
+    d.fn = fn;
+    if (E->vcount > 0) {
+        d.env = (Var *) arena_alloc(E->A, sizeof(Var) * (size_t) E->vcount, 8);
+        memcpy(d.env, E->vars, sizeof(Var) * (size_t) E->vcount);
+        d.envCount = E->vcount;
+    } else {
+        d.env = NULL;
+        d.envCount = 0;
+    }
+    E->fns[E->fcount++] = d;
+}
+
 static const Builtin *GBI = NULL;
 static int GBI_N = 0;
 
@@ -94,7 +126,57 @@ static Value merge_meshes(TopoArena *A, Value a, Value b) {
     return b;
 }
 
+static int find_user_fn(Exec *E, const char *name) {
+    for (int i = E->fcount - 1; i >= 0; i--) if (!strcmp(E->fns[i].name, name)) return i;
+    return -1;
+}
+
+static void exec_copy_parent_funcs(Exec *dst, Exec *src) {
+    if (src->fcount == 0) return;
+    dst->fns = (FnDef *) arena_alloc(dst->A, sizeof(FnDef) * (size_t) src->fcount, 8);
+    memcpy(dst->fns, src->fns, sizeof(FnDef) * (size_t) src->fcount);
+    dst->fcount = src->fcount;
+    dst->fcap = src->fcount;
+}
+
+static Value call_user_fn(Exec *E, FnDef *F, Ast *call) {
+    Exec C;
+    memset(&C, 0, sizeof(C));
+    C.A = E->A;
+    C.host = E->host;
+    C.err[0] = 0;
+    C.hasRet = 0;
+    exec_copy_parent_funcs(&C, E);
+    if (F->envCount > 0) {
+        C.vars = (Var *) arena_alloc(C.A, sizeof(Var) * (size_t) F->envCount, 8);
+        memcpy(C.vars, F->env, sizeof(Var) * (size_t) F->envCount);
+        C.vcount = F->envCount;
+        C.vcap = F->envCount;
+    }
+    int ac = call->call.args.count;
+    if (ac != F->fn->func.pcount) {
+        strsncpy(E->err, "arity mismatch", 256);
+        return zero_val();
+    }
+    for (int i = 0; i < ac; i++) {
+        Value v = eval_node(E, call->call.args.data[i]);
+        if (E->err[0]) return zero_val();
+        setVar(&C, F->fn->func.params[i].name, v);
+    }
+    (void) eval_node(&C, F->fn->func.body);
+    if (C.err[0]) {
+        strsncpy(E->err, C.err, 256);
+        return zero_val();
+    }
+    return C.ret;
+}
+
 static Value eval_call(Exec *E, Ast *n) {
+    int idx = find_user_fn(E, n->call.callee);
+    if (idx >= 0) {
+        FnDef *F = &E->fns[idx];
+        return call_user_fn(E, F, n);
+    }
     for (int i = 0; i < GBI_N; i++) {
         if (strcmp(GBI[i].name, n->call.callee) != 0) continue;
         int ac = n->call.args.count;
@@ -131,6 +213,10 @@ static Value eval_node(Exec *E, Ast *n) {
             Value r = eval_node(E, n->const_.expr);
             if (E->err[0]) return r;
             setConst(E, n->const_.name, r);
+            return zero_val();
+        }
+        case ND_FUNC: {
+            push_fn(E, n->func.name, n);
             return zero_val();
         }
         case ND_ASSIGN: {

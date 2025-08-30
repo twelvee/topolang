@@ -83,6 +83,46 @@ static Ast *parse_statement(Parser *P);
 
 static Ast *parse_for(Parser *P);
 
+static int is_func_decl(Parser *P) {
+    Parser Q = *P;
+    if (Q.t.kind != TK_IDENT) return 0;
+    next_tok(&Q);
+    skip_nl(&Q);
+    if (!accept(&Q, TK_LPAREN)) return 0;
+    skip_nl(&Q);
+    if (!accept(&Q, TK_RPAREN)) {
+        for (;;) {
+            if (Q.t.kind != TK_IDENT) return 0;
+            next_tok(&Q);
+            skip_nl(&Q);
+            if (Q.t.kind != TK_IDENT) return 0;
+            next_tok(&Q);
+            skip_nl(&Q);
+            if (accept(&Q, TK_COMMA)) {
+                skip_nl(&Q);
+                continue;
+            }
+            break;
+        }
+        if (!accept(&Q, TK_RPAREN)) return 0;
+    }
+    skip_nl(&Q);
+    if (!accept(&Q, TK_COLON)) return 0;
+    skip_nl(&Q);
+    if (Q.t.kind != TK_IDENT) return 0;
+    next_tok(&Q);
+    skip_nl(&Q);
+    while (accept(&Q, TK_COMMA)) {
+        skip_nl(&Q);
+        if (Q.t.kind != TK_IDENT) return 0;
+        next_tok(&Q);
+        skip_nl(&Q);
+    }
+    skip_nl(&Q);
+    if (!accept(&Q, TK_LBRACE)) return 0;
+    return 1;
+}
+
 static Ast *parse_primary(Parser *P) {
     if (P->t.kind == TK_IDENT) {
         Token id = P->t;
@@ -315,34 +355,6 @@ static Ast *parse_const(Parser *P) {
     return n;
 }
 
-static Ast *parse_statement(Parser *P) {
-    if (P->t.kind == TK_RETURN) {
-        next_tok(P);
-        return parse_return(P);
-    }
-    if (P->t.kind == TK_FOR) {
-        return parse_for(P);
-    }
-    if (P->t.kind == TK_CONST) {
-        return parse_const(P);
-    }
-    Ast *e = parse_expr(P);
-    expect(P, TK_SEMI, ";");
-    return e;
-}
-
-static Param parse_param(Parser *P) {
-    Param p = (Param) {0};
-    if (P->t.kind != TK_IDENT) return p;
-    p.name = dupLex(P, &P->t);
-    next_tok(P);
-    if (accept(P, TK_EQ)) {
-        Ast *lit = parse_unary(P);
-        p.value = lit;
-    }
-    return p;
-}
-
 static Ast *parse_block(Parser *P) {
     Ast *n = newNode(P, ND_BLOCK);
     skip_nl(P);
@@ -365,6 +377,91 @@ static Ast *parse_block(Parser *P) {
     skip_nl(P);
     expect(P, TK_RBRACE, "}");
     return n;
+}
+
+static Ast *parse_func(Parser *P) {
+    Ast *n = newNode(P, ND_FUNC);
+    Token name = P->t;
+    expect(P, TK_IDENT, "identifier");
+    n->func.name = dupLex(P, &name);
+    expect(P, TK_LPAREN, "(");
+    FParam *pars = NULL;
+    int pc = 0, pcap = 0;
+    if (!accept(P, TK_RPAREN)) {
+        for (;;) {
+            Token ttype = P->t;
+            expect(P, TK_IDENT, "type");
+            Token tname = P->t;
+            expect(P, TK_IDENT, "param");
+            if (pc >= pcap) {
+                int nc = pcap ? pcap * 2 : 4;
+                FParam *neu = (FParam *) Aalloc(P->A, sizeof(FParam) * nc);
+                if (pars) memcpy(neu, pars, sizeof(FParam) * pc);
+                pars = neu;
+                pcap = nc;
+            }
+            pars[pc].type = dupLex(P, &ttype);
+            pars[pc].name = dupLex(P, &tname);
+            pc++;
+            if (accept(P, TK_COMMA)) continue;
+            expect(P, TK_RPAREN, ")");
+            break;
+        }
+    }
+    n->func.params = pars;
+    n->func.pcount = pc;
+    expect(P, TK_COLON, ":");
+    char **rets = NULL;
+    int rc = 0, rcap = 0;
+    for (;;) {
+        Token rt = P->t;
+        expect(P, TK_IDENT, "type");
+        if (rc >= rcap) {
+            int nc = rcap ? rcap * 2 : 4;
+            char **neu = (char **) Aalloc(P->A, sizeof(char *) * nc);
+            if (rets) memcpy(neu, rets, sizeof(char *) * rc);
+            rets = neu;
+            rcap = nc;
+        }
+        rets[rc++] = dupLex(P, &rt);
+        if (accept(P, TK_COMMA)) continue;
+        break;
+    }
+    n->func.rets = rets;
+    n->func.rcount = rc;
+    n->func.body = parse_block(P);
+    return n;
+}
+
+static Ast *parse_statement(Parser *P) {
+    if (P->t.kind == TK_RETURN) {
+        next_tok(P);
+        return parse_return(P);
+    }
+    if (P->t.kind == TK_FOR) {
+        return parse_for(P);
+    }
+    if (P->t.kind == TK_CONST) {
+        return parse_const(P);
+    }
+    if (is_func_decl(P)) {
+        return parse_func(P);
+    }
+    Ast *e = parse_expr(P);
+    expect(P, TK_SEMI, ";");
+    return e;
+}
+
+static Param parse_param(Parser *P) {
+    Param p = (Param) {0};
+    if (P->t.kind != TK_IDENT) return p;
+    p.name = dupLex(P, &P->t);
+    next_tok(P);
+    if (accept(P, TK_EQ)) {
+        Ast *lit = parse_unary(P);
+        p.value = lit;
+    }
+    return p;
 }
 
 static Ast *parse_for(Parser *P) {
@@ -497,6 +594,11 @@ static Ast *parse_mesh(Parser *P) {
         if (P->t.kind == TK_CONST) {
             Ast *c = parse_const(P);
             list_push_ast(P->A, &n->mesh.items, c);
+            continue;
+        }
+        if (is_func_decl(P)) {
+            Ast *f = parse_func(P);
+            list_push_ast(P->A, &n->mesh.items, f);
             continue;
         }
         next_tok(P);
