@@ -452,6 +452,21 @@ static Value bi_error(Host *H, Value *args, int argc, char err[256]) {
     return VVoid();
 }
 
+static Value bi_print(Host *H, Value *args, int argc, char err[256]) {
+    if (argc != 1) {
+        strcpy(err, "print(value)");
+        return VVoid();
+    }
+    if (args[0].k == VAL_STRING) {
+        printf("%s\n", args[0].str.s ? args[0].str.s : "");
+        return VVoid();
+    }
+    char buf[256];
+    value_to_string(H, args[0], buf);
+    printf("%s\n", buf);
+    return VVoid();
+}
+
 static const Builtin BI[] = {
         {"vertex",        bi_vertex},
         {"quad",          bi_quad},
@@ -478,6 +493,7 @@ static const Builtin BI[] = {
         {"cap_plane",     bi_cap_plane},
         {"weld",          bi_weld},
         {"error",         bi_error},
+        {"print",         bi_print},
 };
 
 const Builtin *intrinsics_table(int *outCount) {
