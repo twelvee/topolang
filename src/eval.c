@@ -9,6 +9,7 @@
 typedef struct {
     const char *name;
     Value val;
+    int isConst;
 } Var;
 typedef struct {
     Var *vars;
@@ -22,9 +23,23 @@ typedef struct {
 
 static void *host_arena_alloc(struct Host *H, size_t sz, size_t align) { return arena_alloc(H->arena, sz, align); }
 
-static void setVar(Exec *E, const char *name, Value v) {
+static Value zero_val() {
+    Value z;
+    memset(&z, 0, sizeof(z));
+    return z;
+}
+
+static void setVarEx(Exec *E, const char *name, Value v, int asConst) {
     for (int i = 0; i < E->vcount; i++) {
         if (!strcmp(E->vars[i].name, name)) {
+            if (E->vars[i].isConst) {
+                strsncpy(E->err, "cannot assign to const", 256);
+                return;
+            }
+            if (asConst) {
+                strsncpy(E->err, "redefinition of name", 256);
+                return;
+            }
             E->vars[i].val = v;
             return;
         }
@@ -36,14 +51,20 @@ static void setVar(Exec *E, const char *name, Value v) {
         E->vars = neu;
         E->vcap = nc;
     }
-    E->vars[E->vcount++] = (Var) {name, v};
+    Var vr;
+    vr.name = name;
+    vr.val = v;
+    vr.isConst = asConst ? 1 : 0;
+    E->vars[E->vcount++] = vr;
 }
+
+static void setVar(Exec *E, const char *name, Value v) { setVarEx(E, name, v, 0); }
+
+static void setConst(Exec *E, const char *name, Value v) { setVarEx(E, name, v, 1); }
 
 static Value getVar(Exec *E, const char *name) {
     for (int i = 0; i < E->vcount; i++) if (!strcmp(E->vars[i].name, name)) return E->vars[i].val;
-    Value z;
-    memset(&z, 0, sizeof(z));
-    return z;
+    return zero_val();
 }
 
 static const Builtin *GBI = NULL;
@@ -84,17 +105,11 @@ static Value eval_call(Exec *E, Ast *n) {
         if (emsg[0]) strsncpy(E->err, emsg, 256);
         return r;
     }
-    Value z;
-    memset(&z, 0, sizeof(z));
-    return z;
+    return zero_val();
 }
 
 static Value eval_node(Exec *E, Ast *n) {
-    if (E->hasRet) {
-        Value z;
-        memset(&z, 0, sizeof(z));
-        return z;
-    }
+    if (E->hasRet) return zero_val();
     switch (n->kind) {
         case ND_NUM: {
             Value v;
@@ -112,8 +127,15 @@ static Value eval_node(Exec *E, Ast *n) {
         }
         case ND_IDENT:
             return getVar(E, n->ident.name);
+        case ND_CONST: {
+            Value r = eval_node(E, n->const_.expr);
+            if (E->err[0]) return r;
+            setConst(E, n->const_.name, r);
+            return zero_val();
+        }
         case ND_ASSIGN: {
             Value r = eval_node(E, n->assign.rhs);
+            if (E->err[0]) return r;
             setVar(E, n->assign.lhs, r);
             return r;
         }
@@ -131,9 +153,7 @@ static Value eval_node(Exec *E, Ast *n) {
                     return r;
                 }
             }
-            Value z;
-            memset(&z, 0, sizeof(z));
-            return z;
+            return zero_val();
         }
         case ND_RETURN: {
             if (n->ret.exprs.count > 0) E->ret = eval_node(E, n->ret.exprs.data[0]); else { E->ret.k = VAL_VOID; }
@@ -155,9 +175,7 @@ static Value eval_node(Exec *E, Ast *n) {
                 v.num = L.num - R.num;
                 return v;
             }
-            Value z;
-            memset(&z, 0, sizeof(z));
-            return z;
+            return zero_val();
         }
         case ND_MUL: {
             Value L = eval_node(E, n->mul.lhs);
@@ -169,9 +187,7 @@ static Value eval_node(Exec *E, Ast *n) {
                 v.num = L.num * R.num;
                 return v;
             }
-            Value z;
-            memset(&z, 0, sizeof(z));
-            return z;
+            return zero_val();
         }
         case ND_DIV: {
             Value L = eval_node(E, n->div.lhs);
@@ -187,9 +203,7 @@ static Value eval_node(Exec *E, Ast *n) {
                 v.num = L.num / R.num;
                 return v;
             }
-            Value z;
-            memset(&z, 0, sizeof(z));
-            return z;
+            return zero_val();
         }
         case ND_FOR: {
             Value va = eval_node(E, n->for_.from);
@@ -208,9 +222,7 @@ static Value eval_node(Exec *E, Ast *n) {
                 if (E->hasRet) return E->ret;
                 if (i == end) break;
             }
-            Value z;
-            memset(&z, 0, sizeof(z));
-            return z;
+            return zero_val();
         }
         case ND_NEG: {
             Value v = eval_node(E, n->un.expr);
@@ -218,21 +230,19 @@ static Value eval_node(Exec *E, Ast *n) {
                 v.num = -v.num;
                 return v;
             }
-            Value z;
-            memset(&z, 0, sizeof(z));
-            return z;
+            return zero_val();
         }
         case ND_BLOCK: {
             Value last;
             memset(&last, 0, sizeof(last));
-            for (int i = 0; i < n->block.stmts.count && !E->hasRet; i++) last = eval_node(E, n->block.stmts.data[i]);
+            for (int i = 0; i < n->block.stmts.count && !E->hasRet; i++) {
+                last = eval_node(E, n->block.stmts.data[i]);
+                if (E->err[0]) return last;
+            }
             return last;
         }
-        default: {
-            Value z;
-            memset(&z, 0, sizeof(z));
-            return z;
-        }
+        default:
+            return zero_val();
     }
 }
 

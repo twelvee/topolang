@@ -1,8 +1,8 @@
 mesh Tower {
-  create() : mesh, error {
-    step = -0.05;
-    dz   =  0.2;
+  const step = -0.05;
+  const dz   =  0.2;
 
+  create() : mesh, error {
     r = ring(0, 0, 1.0, 1.0, 32);
     rings = ringlist(r);
 

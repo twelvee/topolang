@@ -20,7 +20,7 @@ static char *load_file(const char *path) {
 }
 
 int main(void) {
-    const char *filename = "box.tl";
+    const char *filename = "tower.tl";
 
     char *code = load_file(filename);
     if (!code) {
@@ -41,22 +41,22 @@ int main(void) {
     }
 
     TopoScene scene = {0};
-    if (!topo_execute(prog, "Cube", A, &scene, &err)) {
+    if (!topo_execute(prog, "Tower", A, &scene, &err)) {
         fprintf(stderr, "Execute: %s\n", err.msg);
         free(code);
         topo_arena_destroy(A);
         return 1;
     }
 
-    if (!topo_export_gltf(&scene, "cube.gltf", &err)) {
-        fprintf(stderr, "GLTF: %s\n", err.msg);
+    if (!topo_export_obj(&scene, "cube.obj", &err)) {
+        fprintf(stderr, "OBJ: %s\n", err.msg);
         free(code);
         topo_free_scene(&scene);
         topo_arena_destroy(A);
         return 1;
     }
 
-    printf("OK: cube.gltf (+ .bin)\n");
+    printf("OK\n");
     topo_free_scene(&scene);
     topo_arena_destroy(A);
     free(code);

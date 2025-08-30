@@ -16,7 +16,8 @@ typedef enum {
     ND_ASSIGN, ND_CALL, ND_IDENT, ND_NUM, ND_STR,
     ND_RETURN, ND_IMPORT, ND_ARRAY, ND_ADD, ND_NEG,
     ND_SUB, ND_MUL, ND_DIV,
-    ND_FOR
+    ND_FOR,
+    ND_CONST
 } NodeKind;
 
 typedef struct {
@@ -65,6 +66,11 @@ typedef struct {
     Ast *body;
 } NdFor;
 
+typedef struct {
+    char *name;
+    Ast *expr;
+} NdConst;
+
 typedef struct Ast {
     NodeKind kind;
     int line, col;
@@ -110,12 +116,15 @@ typedef struct Ast {
             char *path;
         } import_;
         NdFor for_;
+        NdConst const_;
     };
 } Ast;
 
 typedef struct {
     Ast **meshes;
     int count, cap;
+    Ast **globals;
+    int gcount, gcap;
 } AstProgram;
 
 #endif

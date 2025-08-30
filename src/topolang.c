@@ -18,7 +18,44 @@ typedef struct {
 struct TopoProgram {
     MeshEntry *entries;
     int count, cap;
+    Ast **globals;
+    int gcount, gcap;
 };
+
+static void push_mesh_entry(TopoProgram *P, TopoArena *A, const char *name, Ast *meshAst) {
+    if (P->count >= P->cap) {
+        int nc = P->cap ? P->cap * 2 : 16;
+        MeshEntry *neu = (MeshEntry *) arena_alloc(A, sizeof(MeshEntry) * nc, 8);
+        if (P->entries) memcpy(neu, P->entries, sizeof(MeshEntry) * P->count);
+        P->entries = neu;
+        P->cap = nc;
+    }
+    P->entries[P->count].name = name;
+    P->entries[P->count].meshAst = meshAst;
+    P->count++;
+}
+
+static void push_global(TopoProgram *P, TopoArena *A, Ast *g) {
+    if (P->gcount >= P->gcap) {
+        int nc = P->gcap ? P->gcap * 2 : 16;
+        Ast **neu = (Ast **) arena_alloc(A, sizeof(Ast *) * nc, 8);
+        if (P->globals) memcpy(neu, P->globals, sizeof(Ast *) * P->gcount);
+        P->globals = neu;
+        P->gcap = nc;
+    }
+    P->globals[P->gcount++] = g;
+}
+
+static void astlist_push(TopoArena *A, AstList *L, Ast *x) {
+    if (L->count >= L->cap) {
+        int nc = L->cap ? L->cap * 2 : 8;
+        Ast **neu = (Ast **) arena_alloc(A, sizeof(Ast *) * nc, 8);
+        if (L->data) memcpy(neu, L->data, sizeof(Ast *) * L->count);
+        L->data = neu;
+        L->cap = nc;
+    }
+    L->data[L->count++] = x;
+}
 
 TopoArena *topo_arena_create(size_t bytes) { return arena_create(bytes); }
 
@@ -46,18 +83,8 @@ bool topo_compile(const TopoSource *sources, int nSources, TopoArena *A, TopoPro
             }
             return false;
         }
-        for (int m = 0; m < pr.count; m++) {
-            if (P->count >= P->cap) {
-                int nc = P->cap ? P->cap * 2 : 16;
-                MeshEntry *neu = (MeshEntry *) arena_alloc(A, sizeof(MeshEntry) * nc, 8);
-                if (P->entries) memcpy(neu, P->entries, sizeof(MeshEntry) * P->count);
-                P->entries = neu;
-                P->cap = nc;
-            }
-            P->entries[P->count].name = pr.meshes[m]->mesh.name;
-            P->entries[P->count].meshAst = pr.meshes[m];
-            P->count++;
-        }
+        for (int g = 0; g < pr.gcount; g++) push_global(P, A, pr.globals[g]);
+        for (int m = 0; m < pr.count; m++) push_mesh_entry(P, A, pr.meshes[m]->mesh.name, pr.meshes[m]);
     }
     *outProg = P;
     return true;
@@ -87,9 +114,22 @@ topo_execute(const TopoProgram *prog, const char *entryMeshName, TopoArena *A, T
         return false;
     }
 
-    EvalResult R = {0};
+    Ast *wrapper = (Ast *) arena_alloc(A, sizeof(Ast), 8);
+    memset(wrapper, 0, sizeof(Ast));
+    wrapper->kind = ND_BLOCK;
+    wrapper->line = createBody->line;
+    wrapper->col = createBody->col;
+
+    for (int i = 0; i < prog->gcount; i++) astlist_push(A, &wrapper->block.stmts, prog->globals[i]);
+    for (int i = 0; i < mesh->mesh.items.count; i++) {
+        Ast *it = mesh->mesh.items.data[i];
+        if (it->kind == ND_CONST) astlist_push(A, &wrapper->block.stmts, it);
+    }
+    astlist_push(A, &wrapper->block.stmts, createBody);
+
+    EvalResult R = (EvalResult) {0};
     char emsg[256] = {0};
-    if (!eval_block_to_value(createBody, A, &R, emsg)) {
+    if (!eval_block_to_value(wrapper, A, &R, emsg)) {
         if (err) strsncpy(err->msg, emsg[0] ? emsg : "eval failed", 256);
         return false;
     }
@@ -98,9 +138,8 @@ topo_execute(const TopoProgram *prog, const char *entryMeshName, TopoArena *A, T
         return false;
     }
 
-    // QMesh -> TopoMesh
     QMesh *q = R.ret.mesh;
-    TopoMesh m = {0};
+    TopoMesh m = (TopoMesh) {0};
     m.vCount = q->vCount;
     m.vertices = (float *) malloc(sizeof(float) * 3 * m.vCount);
     for (int i = 0; i < q->vCount; i++) {

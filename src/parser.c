@@ -301,6 +301,20 @@ static Ast *parse_return(Parser *P) {
     return n;
 }
 
+static Ast *parse_const(Parser *P) {
+    Ast *n = newNode(P, ND_CONST);
+    expect(P, TK_CONST, "const");
+    Token name = P->t;
+    expect(P, TK_IDENT, "identifier");
+    n->const_.name = dupLex(P, &name);
+    skip_nl(P);
+    expect(P, TK_EQ, "=");
+    skip_nl(P);
+    n->const_.expr = parse_expr(P);
+    expect(P, TK_SEMI, ";");
+    return n;
+}
+
 static Ast *parse_statement(Parser *P) {
     if (P->t.kind == TK_RETURN) {
         next_tok(P);
@@ -308,6 +322,9 @@ static Ast *parse_statement(Parser *P) {
     }
     if (P->t.kind == TK_FOR) {
         return parse_for(P);
+    }
+    if (P->t.kind == TK_CONST) {
+        return parse_const(P);
     }
     Ast *e = parse_expr(P);
     expect(P, TK_SEMI, ";");
@@ -477,6 +494,11 @@ static Ast *parse_mesh(Parser *P) {
             list_push_ast(P->A, &n->mesh.items, it);
             continue;
         }
+        if (P->t.kind == TK_CONST) {
+            Ast *c = parse_const(P);
+            list_push_ast(P->A, &n->mesh.items, c);
+            continue;
+        }
         next_tok(P);
     }
     return n;
@@ -508,9 +530,21 @@ AstProgram parse_program(const char *src, TopoArena *A, char err[256], int *line
                 pr.cap = nc;
             }
             pr.meshes[pr.count++] = m;
-        } else {
-            next_tok(&P);
+            continue;
         }
+        if (P.t.kind == TK_CONST) {
+            Ast *c = parse_const(&P);
+            if (pr.gcount >= pr.gcap) {
+                int nc = pr.gcap ? pr.gcap * 2 : 8;
+                Ast **neu = (Ast **) arena_alloc(A, sizeof(Ast *) * nc, 8);
+                if (pr.globals) memcpy(neu, pr.globals, sizeof(Ast *) * pr.gcount);
+                pr.globals = neu;
+                pr.gcap = nc;
+            }
+            pr.globals[pr.gcount++] = c;
+            continue;
+        }
+        next_tok(&P);
     }
     if (P.hasErr) {
         if (err) strsncpy(err, P.err, 256);

@@ -42,6 +42,7 @@ static Token keyword(Lexer *L, const char *s, int n, Token def) {
     if (n == 8 && !strncmp(s, "override", 8)) return make(L, TK_OVERRIDE, s, n);
     if (n == 3 && !strncmp(s, "for", 3)) return make(L, TK_FOR, s, n);
     if (n == 2 && !strncmp(s, "in", 2)) return make(L, TK_IN, s, n);
+    if (n == 5 && !strncmp(s, "const", 5)) return make(L, TK_CONST, s, n);
     return def;
 }
 
@@ -73,7 +74,7 @@ Token lex_next(Lexer *L) {
             continue;
         }
         switch (c) {
-            case '+':
+            case '+':;
                 int line = L->line, col = L->col;
                 adv(L);
                 return make_at(line, col, TK_PLUS, L->cur - 1, 1);
