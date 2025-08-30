@@ -43,6 +43,8 @@ static Token keyword(Lexer *L, const char *s, int n, Token def) {
     if (n == 3 && !strncmp(s, "for", 3)) return make(L, TK_FOR, s, n);
     if (n == 2 && !strncmp(s, "in", 2)) return make(L, TK_IN, s, n);
     if (n == 5 && !strncmp(s, "const", 5)) return make(L, TK_CONST, s, n);
+    if (n == 2 && !strncmp(s, "if", 2)) return make(L, TK_IF, s, n);
+    if (n == 4 && !strncmp(s, "else", 4)) return make(L, TK_ELSE, s, n);
     return def;
 }
 
@@ -114,6 +116,34 @@ Token lex_next(Lexer *L) {
             case ';':
                 adv(L);
                 return make(L, TK_SEMI, L->cur - 1, 1);
+            case '=':
+                adv(L);
+                if (*L->cur == '=') {
+                    adv(L);
+                    return make(L, TK_EQEQ, L->cur - 2, 2);
+                }
+                return make(L, TK_EQ, L->cur - 1, 1);
+            case '!':
+                adv(L);
+                if (*L->cur == '=') {
+                    adv(L);
+                    return make(L, TK_NEQ, L->cur - 2, 2);
+                }
+                break;
+            case '<':
+                adv(L);
+                if (*L->cur == '=') {
+                    adv(L);
+                    return make(L, TK_LTE, L->cur - 2, 2);
+                }
+                return make(L, TK_LT, L->cur - 1, 1);
+            case '>':
+                adv(L);
+                if (*L->cur == '=') {
+                    adv(L);
+                    return make(L, TK_GTE, L->cur - 2, 2);
+                }
+                return make(L, TK_GT, L->cur - 1, 1);
             case '.': {
                 int line = L->line, col = L->col;
                 adv(L);
@@ -127,9 +157,6 @@ Token lex_next(Lexer *L) {
                 }
                 return make_at(line, col, TK_DOT, L->cur - 1, 1);
             }
-            case '=':
-                adv(L);
-                return make(L, TK_EQ, L->cur - 1, 1);
             case '"': {
                 const char *s = L->cur + 1;
                 int n = 0;

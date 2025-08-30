@@ -14,7 +14,6 @@ static inline void strsncpy(char *dst, const char *src, size_t cap) {
     dst[n] = '\0';
 }
 
-
 static int map_type(const char *t) {
     if (!t) return -1;
     if (!strcmp(t, "number")) return VAL_NUMBER;
@@ -54,6 +53,18 @@ static void sappend(char *dst, size_t cap, const char *fmt, ...) {
     va_start(ap, fmt);
     vsnprintf(dst + len, cap - len, fmt, ap);
     va_end(ap);
+}
+
+static double num(Value v) { return v.k == VAL_NUMBER ? v.num : 0.0; }
+
+static int both_num(Value a, Value b) { return a.k == VAL_NUMBER && b.k == VAL_NUMBER; }
+
+static Value boolv(int t) {
+    Value v;
+    memset(&v, 0, sizeof(v));
+    v.k = VAL_NUMBER;
+    v.num = t ? 1.0 : 0.0;
+    return v;
 }
 
 static void value_to_string(Host *H, Value v, char out[256]) {

@@ -8,7 +8,8 @@ typedef enum {
     TK_PLUS, TK_MINUS, TK_STAR, TK_SLASH,
     TK_FOR, TK_IN, TK_DOTDOT, TK_DOTDOT_EQ,
     TK_MESH, TK_PART, TK_CREATE, TK_RETURN, TK_IMPORT, TK_OVERRIDE,
-    TK_CONST
+    TK_CONST, TK_IF, TK_ELSE,
+    TK_EQEQ, TK_NEQ, TK_LT, TK_GT, TK_LTE,TK_GTE,
 } TokenKind;
 
 typedef struct {

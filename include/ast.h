@@ -18,7 +18,8 @@ typedef enum {
     ND_SUB, ND_MUL, ND_DIV,
     ND_FOR,
     ND_CONST,
-    ND_FUNC
+    ND_FUNC,
+    ND_IF, ND_EQ, ND_NEQ, ND_LT, ND_GT, ND_LTE, ND_GTE,
 } NodeKind;
 
 typedef struct {
@@ -85,6 +86,12 @@ typedef struct {
     Ast *body;
 } NdFunc;
 
+typedef struct {
+    Ast *cond;
+    Ast *thenBranch;
+    Ast *elseBranch;
+} NdIf;
+
 typedef struct Ast {
     NodeKind kind;
     int line, col;
@@ -132,6 +139,10 @@ typedef struct Ast {
         NdFor for_;
         NdConst const_;
         NdFunc func;
+        NdIf if_;
+        struct {
+            Ast *lhs, *rhs;
+        } bin;
     };
 } Ast;
 

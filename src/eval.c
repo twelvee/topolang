@@ -350,6 +350,55 @@ static Value eval_node(Exec *E, Ast *n) {
             }
             return last;
         }
+        case ND_IF: {
+            Value c = eval_node(E, n->if_.cond);
+            if (c.k == VAL_NUMBER && c.num != 0) {
+                return eval_node(E, n->if_.thenBranch);
+            } else if (n->if_.elseBranch) {
+                return eval_node(E, n->if_.elseBranch);
+            }
+            return zero_val();
+        }
+        case ND_EQ: {
+            Value L = eval_node(E, n->bin.lhs);
+            Value R = eval_node(E, n->bin.rhs);
+            if (L.k == VAL_STRING && R.k == VAL_STRING)
+                return boolv(strcmp(L.str.s ? L.str.s : "", R.str.s ? R.str.s : "") == 0);
+            if (both_num(L, R)) return boolv(L.num == R.num);
+            return boolv(0);
+        }
+        case ND_NEQ: {
+            Value L = eval_node(E, n->bin.lhs);
+            Value R = eval_node(E, n->bin.rhs);
+            if (L.k == VAL_STRING && R.k == VAL_STRING)
+                return boolv(strcmp(L.str.s ? L.str.s : "", R.str.s ? R.str.s : "") != 0);
+            if (both_num(L, R)) return boolv(L.num != R.num);
+            return boolv(1);
+        }
+        case ND_LT: {
+            Value L = eval_node(E, n->bin.lhs);
+            Value R = eval_node(E, n->bin.rhs);
+            if (both_num(L, R)) return boolv(L.num < R.num);
+            return boolv(0);
+        }
+        case ND_GT: {
+            Value L = eval_node(E, n->bin.lhs);
+            Value R = eval_node(E, n->bin.rhs);
+            if (both_num(L, R)) return boolv(L.num > R.num);
+            return boolv(0);
+        }
+        case ND_LTE: {
+            Value L = eval_node(E, n->bin.lhs);
+            Value R = eval_node(E, n->bin.rhs);
+            if (both_num(L, R)) return boolv(L.num <= R.num);
+            return boolv(0);
+        }
+        case ND_GTE: {
+            Value L = eval_node(E, n->bin.lhs);
+            Value R = eval_node(E, n->bin.rhs);
+            if (both_num(L, R)) return boolv(L.num >= R.num);
+            return boolv(0);
+        }
         default:
             return zero_val();
     }

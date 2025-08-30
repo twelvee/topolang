@@ -83,6 +83,8 @@ static Ast *parse_statement(Parser *P);
 
 static Ast *parse_for(Parser *P);
 
+static Ast *parse_if(Parser *P);
+
 static int is_func_decl(Parser *P) {
     Parser Q = *P;
     if (Q.t.kind != TK_IDENT) return 0;
@@ -219,31 +221,49 @@ static Ast *parse_add(Parser *P) {
     if (!lhs) return NULL;
     skip_nl(P);
     for (;;) {
-        if (P->t.kind == TK_PLUS) {
+        if (P->t.kind == TK_PLUS || P->t.kind == TK_MINUS) {
+            TokenKind op = P->t.kind;
             next_tok(P);
             skip_nl(P);
             Ast *rhs = parse_term(P);
             if (!rhs) return NULL;
-            Ast *n = newNode(P, ND_ADD);
+            Ast *n = newNode(P, (op == TK_PLUS) ? ND_ADD : ND_SUB);
             n->add.lhs = lhs;
             n->add.rhs = rhs;
             lhs = n;
             skip_nl(P);
             continue;
         }
-        if (P->t.kind == TK_MINUS) {
-            next_tok(P);
-            skip_nl(P);
-            Ast *rhs = parse_term(P);
-            if (!rhs) return NULL;
-            Ast *n = newNode(P, ND_SUB);
-            n->sub.lhs = lhs;
-            n->sub.rhs = rhs;
-            lhs = n;
-            skip_nl(P);
-            continue;
-        }
         break;
+    }
+    return lhs;
+}
+
+static Ast *parse_compare(Parser *P, Ast *lhs) {
+    if (!lhs) {
+        lhs = parse_add(P);
+        if (!lhs) return NULL;
+    }
+    skip_nl(P);
+    for (;;) {
+        NodeKind kind = 0;
+        if (accept(P, TK_EQEQ)) kind = ND_EQ;
+        else if (accept(P, TK_NEQ)) kind = ND_NEQ;
+        else if (accept(P, TK_LT)) kind = ND_LT;
+        else if (accept(P, TK_GT)) kind = ND_GT;
+        else if (accept(P, TK_LTE)) kind = ND_LTE;
+        else if (accept(P, TK_GTE)) kind = ND_GTE;
+        else break;
+
+        skip_nl(P);
+        Ast *rhs = parse_add(P);
+        if (!rhs) return NULL;
+
+        Ast *n = newNode(P, kind);
+        n->bin.lhs = lhs;
+        n->bin.rhs = rhs;
+        lhs = n;
+        skip_nl(P);
     }
     return lhs;
 }
@@ -282,42 +302,15 @@ static Ast *parse_expr(Parser *P) {
                 ident->ident.name = dupLex(P, &id);
                 acc = ident;
             }
-            skip_nl(P);
-            for (;;) {
-                if (P->t.kind == TK_PLUS) {
-                    next_tok(P);
-                    skip_nl(P);
-                    Ast *rhs = parse_term(P);
-                    if (!rhs) return NULL;
-                    Ast *n = newNode(P, ND_ADD);
-                    n->add.lhs = acc;
-                    n->add.rhs = rhs;
-                    acc = n;
-                    skip_nl(P);
-                    continue;
-                }
-                if (P->t.kind == TK_MINUS) {
-                    next_tok(P);
-                    skip_nl(P);
-                    Ast *rhs = parse_term(P);
-                    if (!rhs) return NULL;
-                    Ast *n = newNode(P, ND_SUB);
-                    n->sub.lhs = acc;
-                    n->sub.rhs = rhs;
-                    acc = n;
-                    skip_nl(P);
-                    continue;
-                }
-                break;
-            }
-            return acc;
+            return parse_compare(P, acc);
         }
     }
-    return parse_add(P);
+    return parse_compare(P, NULL);
 }
 
 static Ast *parse_return(Parser *P) {
     Ast *n = newNode(P, ND_RETURN);
+    expect(P, TK_RETURN, "return");
     skip_nl(P);
     if (P->t.kind != TK_SEMI) {
         for (;;) {
@@ -358,6 +351,7 @@ static Ast *parse_block(Parser *P) {
         P->errCol = P->t.col;
         return n;
     }
+    skip_nl(P);
     while (P->t.kind != TK_RBRACE && P->t.kind != TK_EOF && !P->hasErr) {
         if (P->t.kind == TK_NEWLINE) {
             next_tok(P);
@@ -366,8 +360,8 @@ static Ast *parse_block(Parser *P) {
         Ast *s = parse_statement(P);
         if (!s) break;
         list_push_ast(P->A, &n->block.stmts, s);
+        skip_nl(P);
     }
-    skip_nl(P);
     expect(P, TK_RBRACE, "}");
     return n;
 }
@@ -412,22 +406,35 @@ static Ast *parse_func(Parser *P) {
 }
 
 static Ast *parse_statement(Parser *P) {
-    if (P->t.kind == TK_RETURN) {
-        next_tok(P);
-        return parse_return(P);
-    }
-    if (P->t.kind == TK_FOR) {
-        return parse_for(P);
-    }
-    if (P->t.kind == TK_CONST) {
-        return parse_const(P);
-    }
-    if (is_func_decl(P)) {
-        return parse_func(P);
-    }
+    if (P->t.kind == TK_RETURN) return parse_return(P);
+    if (P->t.kind == TK_FOR) return parse_for(P);
+    if (P->t.kind == TK_CONST) return parse_const(P);
+    if (P->t.kind == TK_IF) return parse_if(P);
+
     Ast *e = parse_expr(P);
     expect(P, TK_SEMI, ";");
     return e;
+}
+
+static Ast *parse_if(Parser *P) {
+    Ast *n = newNode(P, ND_IF);
+    expect(P, TK_IF, "if");
+    expect(P, TK_LPAREN, "(");
+    Ast *cond = parse_expr(P);
+    expect(P, TK_RPAREN, ")");
+    n->if_.cond = cond;
+    skip_nl(P);
+    n->if_.thenBranch = parse_block(P);
+    skip_nl(P);
+    if (accept(P, TK_ELSE)) {
+        skip_nl(P);
+        if (P->t.kind == TK_IF) {
+            n->if_.elseBranch = parse_if(P);
+        } else {
+            n->if_.elseBranch = parse_block(P);
+        }
+    }
+    return n;
 }
 
 static Param parse_param(Parser *P) {
