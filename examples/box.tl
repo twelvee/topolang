@@ -1,5 +1,5 @@
 mesh Cube {
-  create() : mesh, error {
+  create() : mesh {
     v0 = vertex(-0.5, -0.5, -0.5);
     v1 = vertex( 0.5, -0.5, -0.5);
     v2 = vertex( 0.5,  0.5, -0.5);
@@ -16,7 +16,6 @@ mesh Cube {
         quad(v0, v1, v5, v4) +
         quad(v2, v3, v7, v6) +
         quad(v1, v2, v6, v5) +
-        quad(v0, v3, v7, v4),
-    nil;
+        quad(v0, v3, v7, v4);
   }
 }

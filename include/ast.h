@@ -81,8 +81,7 @@ typedef struct {
     char *name;
     FParam *params;
     int pcount;
-    char **rets;
-    int rcount;
+    char *ret_type;
     Ast *body;
 } NdFunc;
 

@@ -2,7 +2,7 @@ mesh Tower {
   const dz   =  0.2;
   const step = -0.05;
 
-  make_rings(ring r, number n) : ringlist, error {
+  make_rings(ring r, number n) : ringlist {
     out = ringlist(r);
     for i in 1..=n {
       r = grow_out(r, -0.05, dz);
@@ -11,7 +11,7 @@ mesh Tower {
     return out, nil;
   }
 
-  create() : mesh, error {
+  create() : mesh {
     r = ring(0, 0, 1.0, 1.0, 32);
     rings = make_rings(r, 6);
     side   = stitch(rings);

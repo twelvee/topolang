@@ -112,13 +112,6 @@ static int is_func_decl(Parser *P) {
     if (Q.t.kind != TK_IDENT) return 0;
     next_tok(&Q);
     skip_nl(&Q);
-    while (accept(&Q, TK_COMMA)) {
-        skip_nl(&Q);
-        if (Q.t.kind != TK_IDENT) return 0;
-        next_tok(&Q);
-        skip_nl(&Q);
-    }
-    skip_nl(&Q);
     if (!accept(&Q, TK_LBRACE)) return 0;
     return 1;
 }
@@ -411,24 +404,9 @@ static Ast *parse_func(Parser *P) {
     n->func.params = pars;
     n->func.pcount = pc;
     expect(P, TK_COLON, ":");
-    char **rets = NULL;
-    int rc = 0, rcap = 0;
-    for (;;) {
-        Token rt = P->t;
-        expect(P, TK_IDENT, "type");
-        if (rc >= rcap) {
-            int nc = rcap ? rcap * 2 : 4;
-            char **neu = (char **) Aalloc(P->A, sizeof(char *) * nc);
-            if (rets) memcpy(neu, rets, sizeof(char *) * rc);
-            rets = neu;
-            rcap = nc;
-        }
-        rets[rc++] = dupLex(P, &rt);
-        if (accept(P, TK_COMMA)) continue;
-        break;
-    }
-    n->func.rets = rets;
-    n->func.rcount = rc;
+    Token rt = P->t;
+    expect(P, TK_IDENT, "type");
+    n->func.ret_type = dupLex(P, &rt);
     n->func.body = parse_block(P);
     return n;
 }
