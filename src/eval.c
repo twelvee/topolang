@@ -17,6 +17,8 @@ typedef struct {
     Ast *fn;
     Var *env;
     int envCount;
+    Param *dparams;
+    int dpcount;
 } FnDef;
 
 typedef struct {
@@ -77,7 +79,7 @@ static Value getVar(Exec *E, const char *name) {
     return zero_val();
 }
 
-static void push_fn(Exec *E, const char *name, Ast *fn) {
+static void push_fn_ex(Exec *E, const char *name, Ast *fn, Param *defaults, int dcount) {
     if (E->fcount >= E->fcap) {
         int nc = E->fcap ? E->fcap * 2 : 16;
         FnDef *neu = (FnDef *) arena_alloc(E->A, sizeof(FnDef) * (size_t) nc, 8);
@@ -96,8 +98,12 @@ static void push_fn(Exec *E, const char *name, Ast *fn) {
         d.env = NULL;
         d.envCount = 0;
     }
+    d.dparams = defaults;
+    d.dpcount = dcount;
     E->fns[E->fcount++] = d;
 }
+
+static void push_fn(Exec *E, const char *name, Ast *fn) { push_fn_ex(E, name, fn, NULL, 0); }
 
 static const Builtin *GBI = NULL;
 static int GBI_N = 0;
@@ -139,6 +145,13 @@ static void exec_copy_parent_funcs(Exec *dst, Exec *src) {
     dst->fcap = src->fcount;
 }
 
+static int find_param_index(const Ast *fn, const char *name) {
+    for (int i = 0; i < fn->func.pcount; i++) {
+        if (!strcmp(fn->func.params[i].name, name)) return i;
+    }
+    return -1;
+}
+
 static Value call_user_fn(Exec *E, FnDef *F, Ast *call) {
     Exec C;
     memset(&C, 0, sizeof(C));
@@ -146,6 +159,7 @@ static Value call_user_fn(Exec *E, FnDef *F, Ast *call) {
     C.host = E->host;
     C.err[0] = 0;
     C.hasRet = 0;
+
     exec_copy_parent_funcs(&C, E);
     if (F->envCount > 0) {
         C.vars = (Var *) arena_alloc(C.A, sizeof(Var) * (size_t) F->envCount, 8);
@@ -153,41 +167,120 @@ static Value call_user_fn(Exec *E, FnDef *F, Ast *call) {
         C.vcount = F->envCount;
         C.vcap = F->envCount;
     }
-    int ac = call->call.args.count;
-    if (ac != F->fn->func.pcount) {
-        strsncpy(E->err, "arity mismatch", 256);
-        return zero_val();
-    }
-    for (int i = 0; i < ac; i++) {
-        Value v = eval_node(E, call->call.args.data[i]);
-        if (E->err[0]) return zero_val();
-        int need = map_type(F->fn->func.params[i].type);
-        if (!value_is_kind(v, need)) {
-            snprintf(E->err, 256,
-                     "Function '%s' argument %d type mismatch at line %d:%d (got %s, expected %s)",
-                     F->fn->func.name,
-                     i + 1,
-                     call->call.args.data[i]->line, call->call.args.data[i]->col,
-                     val_kind_str(v.k),
-                     val_kind_str(need));
-            return zero_val();
+
+    const char *fname = F->name;
+    const char *dot = strchr(fname, '.');
+    if (dot) {
+        int prefLen = (int) (dot - fname);
+        int need = prefLen + 1;
+        int n0 = C.fcount;
+        for (int i = 0; i < n0; i++) {
+            const char *gn = C.fns[i].name;
+            if (strncmp(gn, fname, (size_t) prefLen) != 0 || gn[prefLen] != '.') continue;
+            const char *suf = gn + prefLen + 1;
+            if (find_user_fn(&C, suf) >= 0) continue;
+            if (C.fcount >= C.fcap) {
+                int nc = C.fcap ? C.fcap * 2 : 16;
+                FnDef *neu = (FnDef *) arena_alloc(C.A, sizeof(FnDef) * (size_t) nc, 8);
+                if (C.fns) memcpy(neu, C.fns, sizeof(FnDef) * (size_t) C.fcount);
+                C.fns = neu;
+                C.fcap = nc;
+            }
+            size_t sl = strlen(suf);
+            char *alias = (char *) arena_alloc(C.A, sl + 1, 1);
+            memcpy(alias, suf, sl);
+            alias[sl] = 0;
+            FnDef A = C.fns[i];
+            A.name = alias;
+            C.fns[C.fcount++] = A;
         }
-        setVar(&C, F->fn->func.params[i].name, v);
     }
 
-    (void) eval_node(&C, F->fn->func.body);
+    const Ast *fn = F->fn;
+    int pc = fn->func.pcount;
+
+    Value *vals = (Value *) arena_alloc(E->A, sizeof(Value) * (size_t) pc, 8);
+    char *set = (char *) arena_alloc(E->A, (size_t) pc, 8);
+    Ast **argn = (Ast **) arena_alloc(E->A, sizeof(Ast *) * (size_t) pc, 8);
+    for (int i = 0; i < pc; i++) {
+        memset(&vals[i], 0, sizeof(Value));
+        set[i] = 0;
+        argn[i] = NULL;
+    }
+
+    int nextPos = 0;
+    for (int ai = 0; ai < call->call.args.count; ai++) {
+        Ast *arg = call->call.args.data[ai];
+        if (arg->kind == ND_ASSIGN) {
+            int idx = find_param_index(fn, arg->assign.lhs);
+            if (idx < 0) {
+                snprintf(E->err, 256, "%s:%d:%d %s: unknown named argument '%s'",
+                         call->file ? call->file : "<unknown>", call->line, call->col,
+                         fn->func.name, arg->assign.lhs);
+                return zero_val();
+            }
+            if (set[idx]) {
+                snprintf(E->err, 256, "%s:%d:%d %s: duplicate argument '%s'",
+                         call->file ? call->file : "<unknown>", call->line, call->col,
+                         fn->func.name, fn->func.params[idx].name);
+                return zero_val();
+            }
+            vals[idx] = eval_node(E, arg->assign.rhs);
+            if (E->err[0]) return zero_val();
+            set[idx] = 1;
+            argn[idx] = arg->assign.rhs;
+        } else {
+            while (nextPos < pc && set[nextPos]) nextPos++;
+            if (nextPos >= pc) {
+                snprintf(E->err, 256, "%s:%d:%d %s: too many arguments (max %d)",
+                         call->file ? call->file : "<unknown>", call->line, call->col,
+                         fn->func.name, pc);
+                return zero_val();
+            }
+            vals[nextPos] = eval_node(E, arg);
+            if (E->err[0]) return zero_val();
+            set[nextPos] = 1;
+            argn[nextPos] = arg;
+            nextPos++;
+        }
+    }
+
+    for (int i = 0; i < pc; i++) {
+        if (!set[i]) {
+            snprintf(E->err, 256, "%s:%d:%d %s: missing argument '%s'",
+                     call->file ? call->file : "<unknown>", call->line, call->col,
+                     fn->func.name, fn->func.params[i].name);
+            return zero_val();
+        }
+        int need = map_type(fn->func.params[i].type);
+        if (!value_is_kind(vals[i], need)) {
+            snprintf(E->err, 256,
+                     "%s:%d:%d %s: argument %d ('%s') type mismatch (got %s, expected %s)",
+                     (argn[i] && argn[i]->file) ? argn[i]->file : (call->file ? call->file : "<unknown>"),
+                     (argn[i] ? argn[i]->line : call->line),
+                     (argn[i] ? argn[i]->col : call->col),
+                     fn->func.name, i + 1, fn->func.params[i].name,
+                     val_kind_str(vals[i].k), val_kind_str(need));
+            return zero_val();
+        }
+        setVar(&C, fn->func.params[i].name, vals[i]);
+    }
+
+    (void) eval_node(&C, fn->func.body);
     if (C.err[0]) {
         strsncpy(E->err, C.err, 256);
         return zero_val();
     }
-    int want = map_type(F->fn->func.ret_type);
+
+    int want = map_type(fn->func.ret_type);
     if (!value_is_kind(C.ret, want)) {
         snprintf(E->err, 256,
-                 "Function '%s' return type mismatch at line %d:%d (got %s, expected %s)",
-                 F->fn->func.name,
-                 F->fn->func.body->line, F->fn->func.body->col,
-                 val_kind_str(C.ret.k),
-                 val_kind_str(want));
+                 "%s:%d:%d %s: return type mismatch (got %s, expected %s)",
+                 (fn->func.body && fn->func.body->file) ? fn->func.body->file : (call->file ? call->file : "<unknown>"),
+                 (fn->func.body ? fn->func.body->line : call->line),
+                 (fn->func.body ? fn->func.body->col : call->col),
+                 fn->func.name,
+                 val_kind_str(C.ret.k), val_kind_str(want));
         return zero_val();
     }
 
@@ -204,13 +297,47 @@ static Value eval_call(Exec *E, Ast *n) {
         if (strcmp(GBI[i].name, n->call.callee) != 0) continue;
         int ac = n->call.args.count;
         Value *argv = (Value *) arena_alloc(E->A, sizeof(Value) * (size_t) ac, 8);
-        for (int k = 0; k < ac; k++) argv[k] = eval_node(E, n->call.args.data[k]);
+        for (int k = 0; k < ac; k++) {
+            argv[k] = eval_node(E, n->call.args.data[k]);
+            if (E->err[0]) return zero_val();
+        }
         char emsg[256] = {0};
         Value r = GBI[i].fn(&E->host, argv, ac, emsg);
-        if (emsg[0]) strsncpy(E->err, emsg, 256);
+        if (emsg[0]) {
+            snprintf(E->err, 256, "%s:%d:%d %s: %s",
+                     n->file ? n->file : "<unknown>",
+                     n->line, n->col,
+                     n->call.callee, emsg);
+        }
         return r;
     }
+    snprintf(E->err, 256, "%s:%d:%d unknown function: %s",
+             n->file ? n->file : "<unknown>", n->line, n->col, n->call.callee);
     return zero_val();
+}
+
+static Ast *make_func_from_part(Exec *E, Ast *part) {
+    Ast *f = (Ast *) arena_alloc(E->A, sizeof(Ast), 8);
+    memset(f, 0, sizeof(Ast));
+    f->kind = ND_FUNC;
+    f->line = part->line;
+    f->col = part->col;
+    f->func.name = part->part.name;
+    f->func.pcount = part->part.pcount;
+    if (f->func.pcount > 0) {
+        FParam *fp = (FParam *) arena_alloc(E->A, sizeof(FParam) * (size_t) f->func.pcount, 8);
+        for (int i = 0; i < f->func.pcount; i++) {
+            fp[i].type = part->part.params[i].type;
+            fp[i].name = part->part.params[i].name;
+        }
+        f->func.params = fp;
+    } else {
+        f->func.params = NULL;
+    }
+    static char mesh_ret[] = "mesh";
+    f->func.ret_type = mesh_ret;
+    f->func.body = part->part.body;
+    return f;
 }
 
 static Value eval_node(Exec *E, Ast *n) {
@@ -242,6 +369,11 @@ static Value eval_node(Exec *E, Ast *n) {
             push_fn(E, n->func.name, n);
             return zero_val();
         }
+        case ND_PART: {
+            Ast *f = make_func_from_part(E, n);
+            push_fn_ex(E, n->part.name, f, n->part.params, n->part.pcount);
+            return zero_val();
+        }
         case ND_ASSIGN: {
             Value r = eval_node(E, n->assign.rhs);
             if (E->err[0]) return r;
@@ -265,7 +397,10 @@ static Value eval_node(Exec *E, Ast *n) {
             return zero_val();
         }
         case ND_RETURN: {
-            if (n->ret.exprs.count > 0) E->ret = eval_node(E, n->ret.exprs.data[0]); else { E->ret.k = VAL_VOID; }
+            if (n->ret.exprs.count > 0) E->ret = eval_node(E, n->ret.exprs.data[0]);
+            else {
+                E->ret.k = VAL_VOID;
+            }
             E->hasRet = 1;
             return E->ret;
         }
@@ -303,7 +438,8 @@ static Value eval_node(Exec *E, Ast *n) {
             Value R = eval_node(E, n->div.rhs);
             if (L.k == VAL_NUMBER && R.k == VAL_NUMBER) {
                 if (R.num == 0) {
-                    strsncpy(E->err, "division by zero", 256);
+                    snprintf(E->err, 256, "%s:%d:%d division by zero",
+                             n->file ? n->file : "<unknown>", n->line, n->col);
                     return L;
                 }
                 Value v;
@@ -352,11 +488,8 @@ static Value eval_node(Exec *E, Ast *n) {
         }
         case ND_IF: {
             Value c = eval_node(E, n->if_.cond);
-            if (c.k == VAL_NUMBER && c.num != 0) {
-                return eval_node(E, n->if_.thenBranch);
-            } else if (n->if_.elseBranch) {
-                return eval_node(E, n->if_.elseBranch);
-            }
+            if (c.k == VAL_NUMBER && c.num != 0) return eval_node(E, n->if_.thenBranch);
+            else if (n->if_.elseBranch) return eval_node(E, n->if_.elseBranch);
             return zero_val();
         }
         case ND_EQ: {

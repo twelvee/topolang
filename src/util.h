@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include "intrinsics.h"
+#include "token.h"
 
 static inline void strsncpy(char *dst, const char *src, size_t cap) {
     if (cap == 0) return;
@@ -66,6 +67,8 @@ static Value boolv(int t) {
     v.num = t ? 1.0 : 0.0;
     return v;
 }
+
+static int is_type_token(TokenKind k) { return k == TK_IDENT || k == TK_MESH; }
 
 static void value_to_string(Host *H, Value v, char out[256]) {
     out[0] = 0;

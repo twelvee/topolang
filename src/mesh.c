@@ -430,3 +430,29 @@ void mesh_mirror_z(QMesh *m, float weldEps) {
     }
     for (int i = 0; i < m->vCount; i++) if (fabsf(m->v[i].z) < weldEps) m->v[i].z = 0.f;
 }
+
+void mesh_bbox_minmax(const QMesh *m, float *minx, float *miny, float *minz,
+                      float *maxx, float *maxy, float *maxz) {
+    if (!m || m->vCount <= 0) {
+        *minx = *miny = *minz = 0.0f;
+        *maxx = *maxy = *maxz = 0.0f;
+        return;
+    }
+    Vector3 v0 = m->v[0];
+    float mnx = v0.x, mny = v0.y, mnz = v0.z, mxx = v0.x, mxy = v0.y, mxz = v0.z;
+    for (int i = 1; i < m->vCount; i++) {
+        Vector3 v = m->v[i];
+        if (v.x < mnx) mnx = v.x;
+        if (v.y < mny) mny = v.y;
+        if (v.z < mnz) mnz = v.z;
+        if (v.x > mxx) mxx = v.x;
+        if (v.y > mxy) mxy = v.y;
+        if (v.z > mxz) mxz = v.z;
+    }
+    *minx = mnx;
+    *miny = mny;
+    *minz = mnz;
+    *maxx = mxx;
+    *maxy = mxy;
+    *maxz = mxz;
+}

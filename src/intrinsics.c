@@ -100,15 +100,44 @@ static Value bi_grow_out(Host *H, Value *args, int argc, char err[256]) {
     return VRingV(outR);
 }
 
+static QRing *clone_ring_on_builder(Host *H, const QRing *src) {
+    QMesh *b = ensure_builder(H);
+    QRing *out = (QRing *) arena_alloc(H->arena, sizeof(QRing), 8);
+    out->count = src->count;
+    out->cap = src->count;
+    out->alloc = (QAllocator) {0};
+    out->idx = (int *) arena_alloc(H->arena, sizeof(int) * (size_t) src->count, 4);
+    for (int k = 0; k < src->count; k++) {
+        int old = src->idx[k];
+        int neu = qm_addv(b, b->v[old]);
+        out->idx[k] = neu;
+    }
+    return out;
+}
+
 static Value bi_lift_x(Host *H, Value *args, int argc, char err[256]) {
     if (argc < 2 || args[0].k != VAL_RING) {
         strcpy(err, "lift_x(ring, dx)");
         return VVoid();
     }
     QMesh *b = ensure_builder(H);
-    qm_set_alloc(b, make_arena_alloc(H));
-    ring_lift_x(b, args[0].ring, (float) ARGNUM(1));
-    return VRingV(args[0].ring);
+    float dx = (float) ARGNUM(1);
+
+    const QRing *src = args[0].ring;
+    QRing *dst = (QRing *) arena_alloc(H->arena, sizeof(QRing), 8);
+    dst->count = src->count;
+    dst->cap = src->count;
+    dst->alloc = (QAllocator) {0};
+    dst->idx = (int *) arena_alloc(H->arena, sizeof(int) * (size_t) src->count, 4);
+
+    for (int i = 0; i < src->count; i++) {
+        int oi = src->idx[i];
+        Vector3 p = b->v[oi];
+        p.x += dx;
+        int ni = qm_addv(b, p);
+        dst->idx[i] = ni;
+    }
+    return VRingV(dst);
 }
 
 static Value bi_lift_y(Host *H, Value *args, int argc, char err[256]) {
@@ -117,9 +146,23 @@ static Value bi_lift_y(Host *H, Value *args, int argc, char err[256]) {
         return VVoid();
     }
     QMesh *b = ensure_builder(H);
-    qm_set_alloc(b, make_arena_alloc(H));
-    ring_lift_y(b, args[0].ring, (float) ARGNUM(1));
-    return VRingV(args[0].ring);
+    float dy = (float) ARGNUM(1);
+
+    const QRing *src = args[0].ring;
+    QRing *dst = (QRing *) arena_alloc(H->arena, sizeof(QRing), 8);
+    dst->count = src->count;
+    dst->cap = src->count;
+    dst->alloc = (QAllocator) {0};
+    dst->idx = (int *) arena_alloc(H->arena, sizeof(int) * (size_t) src->count, 4);
+
+    for (int i = 0; i < src->count; i++) {
+        int oi = src->idx[i];
+        Vector3 p = b->v[oi];
+        p.y += dy;
+        int ni = qm_addv(b, p);
+        dst->idx[i] = ni;
+    }
+    return VRingV(dst);
 }
 
 static Value bi_lift_z(Host *H, Value *args, int argc, char err[256]) {
@@ -128,9 +171,23 @@ static Value bi_lift_z(Host *H, Value *args, int argc, char err[256]) {
         return VVoid();
     }
     QMesh *b = ensure_builder(H);
-    qm_set_alloc(b, make_arena_alloc(H));
-    ring_lift_z(b, args[0].ring, (float) ARGNUM(1));
-    return VRingV(args[0].ring);
+    float dz = (float) ARGNUM(1);
+
+    const QRing *src = args[0].ring;
+    QRing *dst = (QRing *) arena_alloc(H->arena, sizeof(QRing), 8);
+    dst->count = src->count;
+    dst->cap = src->count;
+    dst->alloc = (QAllocator) {0};
+    dst->idx = (int *) arena_alloc(H->arena, sizeof(int) * (size_t) src->count, 4);
+
+    for (int i = 0; i < src->count; i++) {
+        int oi = src->idx[i];
+        Vector3 p = b->v[oi];
+        p.z += dz;
+        int ni = qm_addv(b, p);
+        dst->idx[i] = ni;
+    }
+    return VRingV(dst);
 }
 
 static Value bi_weld(Host *H, Value *args, int argc, char err[256]) {
@@ -366,6 +423,126 @@ static Value bi_ringlist_push(Host *H, Value *args, int argc, char err[256]) {
     return VRingListPtrs(arr, n + 1);
 }
 
+static Value bi_bb_min_x(Host *H, Value *a, int n, char err[256]) {
+    if (n != 1 || a[0].k != VAL_MESH) {
+        strcpy(err, "bb_min_x(mesh)");
+        return VVoid();
+    }
+    float mnx, mny, mnz, mxx, mxy, mxz;
+    mesh_bbox_minmax(a[0].mesh, &mnx, &mny, &mnz, &mxx, &mxy, &mxz);
+    return VNum(mnx);
+}
+
+static Value bi_bb_min_y(Host *H, Value *a, int n, char err[256]) {
+    if (n != 1 || a[0].k != VAL_MESH) {
+        strcpy(err, "bb_min_y(mesh)");
+        return VVoid();
+    }
+    float mnx, mny, mnz, mxx, mxy, mxz;
+    mesh_bbox_minmax(a[0].mesh, &mnx, &mny, &mnz, &mxx, &mxy, &mxz);
+    return VNum(mny);
+}
+
+static Value bi_bb_min_z(Host *H, Value *a, int n, char err[256]) {
+    if (n != 1 || a[0].k != VAL_MESH) {
+        strcpy(err, "bb_min_z(mesh)");
+        return VVoid();
+    }
+    float mnx, mny, mnz, mxx, mxy, mxz;
+    mesh_bbox_minmax(a[0].mesh, &mnx, &mny, &mnz, &mxx, &mxy, &mxz);
+    return VNum(mnz);
+}
+
+static Value bi_bb_max_x(Host *H, Value *a, int n, char err[256]) {
+    if (n != 1 || a[0].k != VAL_MESH) {
+        strcpy(err, "bb_max_x(mesh)");
+        return VVoid();
+    }
+    float mnx, mny, mnz, mxx, mxy, mxz;
+    mesh_bbox_minmax(a[0].mesh, &mnx, &mny, &mnz, &mxx, &mxy, &mxz);
+    return VNum(mxx);
+}
+
+static Value bi_bb_max_y(Host *H, Value *a, int n, char err[256]) {
+    if (n != 1 || a[0].k != VAL_MESH) {
+        strcpy(err, "bb_max_y(mesh)");
+        return VVoid();
+    }
+    float mnx, mny, mnz, mxx, mxy, mxz;
+    mesh_bbox_minmax(a[0].mesh, &mnx, &mny, &mnz, &mxx, &mxy, &mxz);
+    return VNum(mxy);
+}
+
+static Value bi_bb_max_z(Host *H, Value *a, int n, char err[256]) {
+    if (n != 1 || a[0].k != VAL_MESH) {
+        strcpy(err, "bb_max_z(mesh)");
+        return VVoid();
+    }
+    float mnx, mny, mnz, mxx, mxy, mxz;
+    mesh_bbox_minmax(a[0].mesh, &mnx, &mny, &mnz, &mxx, &mxy, &mxz);
+    return VNum(mxz);
+}
+
+static Value bi_bb_size_x(Host *H, Value *a, int n, char err[256]) {
+    if (n != 1 || a[0].k != VAL_MESH) {
+        strcpy(err, "bb_size_x(mesh)");
+        return VVoid();
+    }
+    float mnx, mny, mnz, mxx, mxy, mxz;
+    mesh_bbox_minmax(a[0].mesh, &mnx, &mny, &mnz, &mxx, &mxy, &mxz);
+    return VNum((double) (mxx - mnx));
+}
+
+static Value bi_bb_size_y(Host *H, Value *a, int n, char err[256]) {
+    if (n != 1 || a[0].k != VAL_MESH) {
+        strcpy(err, "bb_size_y(mesh)");
+        return VVoid();
+    }
+    float mnx, mny, mnz, mxx, mxy, mxz;
+    mesh_bbox_minmax(a[0].mesh, &mnx, &mny, &mnz, &mxx, &mxy, &mxz);
+    return VNum((double) (mxy - mny));
+}
+
+static Value bi_bb_size_z(Host *H, Value *a, int n, char err[256]) {
+    if (n != 1 || a[0].k != VAL_MESH) {
+        strcpy(err, "bb_size_z(mesh)");
+        return VVoid();
+    }
+    float mnx, mny, mnz, mxx, mxy, mxz;
+    mesh_bbox_minmax(a[0].mesh, &mnx, &mny, &mnz, &mxx, &mxy, &mxz);
+    return VNum((double) (mxz - mnz));
+}
+
+static Value bi_bb_center_x(Host *H, Value *a, int n, char err[256]) {
+    if (n != 1 || a[0].k != VAL_MESH) {
+        strcpy(err, "bb_center_x(mesh)");
+        return VVoid();
+    }
+    float mnx, mny, mnz, mxx, mxy, mxz;
+    mesh_bbox_minmax(a[0].mesh, &mnx, &mny, &mnz, &mxx, &mxy, &mxz);
+    return VNum(((double) mnx + (double) mxx) * 0.5);
+}
+
+static Value bi_bb_center_y(Host *H, Value *a, int n, char err[256]) {
+    if (n != 1 || a[0].k != VAL_MESH) {
+        strcpy(err, "bb_center_y(mesh)");
+        return VVoid();
+    }
+    float mnx, mny, mnz, mxx, mxy, mxz;
+    mesh_bbox_minmax(a[0].mesh, &mnx, &mny, &mnz, &mxx, &mxy, &mxz);
+    return VNum(((double) mny + (double) mxy) * 0.5);
+}
+
+static Value bi_bb_center_z(Host *H, Value *a, int n, char err[256]) {
+    if (n != 1 || a[0].k != VAL_MESH) {
+        strcpy(err, "bb_center_z(mesh)");
+        return VVoid();
+    }
+    float mnx, mny, mnz, mxx, mxy, mxz;
+    mesh_bbox_minmax(a[0].mesh, &mnx, &mny, &mnz, &mxx, &mxy, &mxz);
+    return VNum(((double) mnz + (double) mxz) * 0.5);
+}
+
 static Value bi_first(Host *H, Value *args, int argc, char err[256]) {
     if (argc != 1 || args[0].k != VAL_RINGLIST || args[0].ringlist.count <= 0) {
         strcpy(err, "first(ringlist)");
@@ -494,6 +671,18 @@ static const Builtin BI[] = {
         {"weld",          bi_weld},
         {"error",         bi_error},
         {"print",         bi_print},
+        {"bb_min_x",      bi_bb_min_x},
+        {"bb_min_y",      bi_bb_min_y},
+        {"bb_min_z",      bi_bb_min_z},
+        {"bb_max_x",      bi_bb_max_x},
+        {"bb_max_y",      bi_bb_max_y},
+        {"bb_max_z",      bi_bb_max_z},
+        {"bb_size_x",     bi_bb_size_x},
+        {"bb_size_y",     bi_bb_size_y},
+        {"bb_size_z",     bi_bb_size_z},
+        {"bb_center_x",   bi_bb_center_x},
+        {"bb_center_y",   bi_bb_center_y},
+        {"bb_center_z",   bi_bb_center_z},
 };
 
 const Builtin *intrinsics_table(int *outCount) {

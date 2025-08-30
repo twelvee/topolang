@@ -6,7 +6,8 @@
 
 typedef struct TopoArena {
     uint8_t *base;
-    size_t cap, off;
+    size_t cap;
+    size_t off;
 } TopoArena;
 
 TopoArena *arena_create(size_t cap);

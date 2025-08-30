@@ -22,9 +22,9 @@ void topo_arena_reset(TopoArena *A);
 void topo_arena_destroy(TopoArena *A);
 
 typedef struct {
-    float *vertices;   // xyz * vCount
+    float *vertices;
     int vCount;
-    int *quads;      // 4* qCount
+    int *quads;
     int qCount;
 } TopoMesh;
 
@@ -37,10 +37,27 @@ typedef struct TopoProgram TopoProgram;
 
 typedef struct {
     const char *path;
-    const char *code; //utf8
+    const char *code;
 } TopoSource;
 
+typedef struct {
+    const char **include_dirs;
+    int include_dir_count;
+
+    bool (*read_file)(const char *requested_path,
+                      const char *from_path,
+                      const char **out_buf,
+                      const char **out_name,
+                      void *user);
+
+    void *user;
+} TopoOptions;
+
 bool topo_compile(const TopoSource *sources, int nSources, TopoArena *A, TopoProgram **outProg, TopoError *err);
+
+bool
+topo_compile_ex(const TopoSource *sources, int nSources, const TopoOptions *opt, TopoArena *A, TopoProgram **outProg,
+                TopoError *err);
 
 bool topo_execute(const TopoProgram *prog, const char *entryMeshName,
                   TopoArena *A, TopoScene *outScene, TopoError *err);

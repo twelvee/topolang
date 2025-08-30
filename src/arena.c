@@ -23,7 +23,9 @@ void *arena_alloc(TopoArena *A, size_t sz, size_t align) {
     return p;
 }
 
-void arena_reset(TopoArena *A) { A->off = 0; }
+void arena_reset(TopoArena *A) {
+    A->off = 0;
+}
 
 void arena_destroy(TopoArena *A) {
     if (A) {

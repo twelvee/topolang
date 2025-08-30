@@ -23,6 +23,7 @@ typedef enum {
 } NodeKind;
 
 typedef struct {
+    char *type;
     char *name;
     Ast *value;
 } Param;
@@ -91,10 +92,10 @@ typedef struct {
     Ast *thenBranch;
     Ast *elseBranch;
 } NdIf;
-
 typedef struct Ast {
     NodeKind kind;
     int line, col;
+    const char *file;
     union {
         NdMesh mesh;
         NdPart part;

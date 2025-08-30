@@ -20,7 +20,7 @@ static char *load_file(const char *path) {
 }
 
 int main(void) {
-    const char *filename = "tower.tl";
+    const char *filename = "../examples/chair/chair.tl";
 
     char *code = load_file(filename);
     if (!code) {
@@ -41,7 +41,7 @@ int main(void) {
     }
 
     TopoScene scene = {0};
-    if (!topo_execute(prog, "Tower", A, &scene, &err)) {
+    if (!topo_execute(prog, "Chair", A, &scene, &err)) {
         fprintf(stderr, "Execute: %s\n", err.msg);
         free(code);
         topo_arena_destroy(A);

@@ -20,15 +20,23 @@ typedef struct {
         } ringlist;
     };
 } Value;
+
 enum {
-    VAL_VOID = 0, VAL_NUMBER, VAL_STRING, VAL_MESH, VAL_RING, VAL_RINGLIST
+    VAL_VOID = 0,
+    VAL_NUMBER,
+    VAL_STRING,
+    VAL_MESH,
+    VAL_RING,
+    VAL_RINGLIST
 };
+
 typedef struct Host {
     TopoArena *arena;
     QMesh *build;
 
     void *(*alloc)(struct Host *H, size_t sz, size_t align);
 } Host;
+
 typedef struct {
     const char *name;
 

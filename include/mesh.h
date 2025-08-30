@@ -96,4 +96,7 @@ void mesh_triangulate_quads(const QMesh *src, TMesh *out, int choose_shortest_di
 
 void mesh_weld_by_distance(QMesh *m, float eps);
 
+void mesh_bbox_minmax(const QMesh *m, float *minx, float *miny, float *minz,
+                      float *maxx, float *maxy, float *maxz);
+
 #endif
